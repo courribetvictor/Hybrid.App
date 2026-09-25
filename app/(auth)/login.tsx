@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -65,12 +66,16 @@ export default function LoginScreen() {
 
         {/* Logo */}
         <Animated.View entering={FadeIn.duration(500)} style={styles.logoWrap}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>⚡</Text>
-          </View>
-          <Text style={styles.logoText}>
-            Hybrid<Text style={styles.logoDot}>.</Text>App
-          </Text>
+          <Image
+            source={require('@/assets/logo-icon.png')}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
+          <Image
+            source={require('@/assets/logo-full.png')}
+            style={styles.logoText}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Tes performances, tous sports confondus.</Text>
         </Animated.View>
 
@@ -170,23 +175,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   safe: { flex: 1, paddingHorizontal: Spacing.xl, justifyContent: 'space-between' },
   logoWrap: { alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.lg },
-  logoMark: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: Colors.electric,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.md,
-  },
-  logoMarkText: { fontSize: 28 },
-  logoText: {
-    fontSize: FontSize['3xl'],
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  logoDot: { color: Colors.electric },
+  logoMark: { width: 72, height: 72 },
+  logoText: { width: 180, height: 40 },
   tagline: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center' },
   form: { gap: Spacing.md },
   formTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, marginBottom: 4 },

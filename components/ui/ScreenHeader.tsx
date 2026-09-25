@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, Image } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme'
 
@@ -21,9 +21,11 @@ export function ScreenHeader({ title, logo, right, left, border = true }: Screen
 
         <View style={styles.center}>
           {logo ? (
-            <Text style={styles.logo}>
-              Hybrid<Text style={styles.dot}>.</Text>App
-            </Text>
+            <Image
+              source={require('@/assets/logo-full.png')}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
           ) : (
             <Text style={styles.title}>{title}</Text>
           )}
@@ -63,14 +65,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  dot: {
-    color: Colors.electric,
+  logoImg: {
+    height: 28,
+    width: 140,
   },
   title: {
     fontSize: FontSize.lg,

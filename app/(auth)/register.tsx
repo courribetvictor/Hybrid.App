@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Image,
 } from 'react-native'
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated'
 import { router } from 'expo-router'
@@ -115,12 +116,16 @@ export default function RegisterScreen() {
       >
         {/* Logo */}
         <Animated.View entering={FadeIn.duration(400)} style={styles.logoWrap}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>⚡</Text>
-          </View>
-          <Text style={styles.logoText}>
-            Hybrid<Text style={styles.logoDot}>.</Text>App
-          </Text>
+          <Image
+            source={require('@/assets/logo-icon.png')}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
+          <Image
+            source={require('@/assets/logo-full.png')}
+            style={styles.logoText}
+            resizeMode="contain"
+          />
         </Animated.View>
 
         {/* Step indicator */}
@@ -248,18 +253,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { paddingHorizontal: Spacing.xl, gap: Spacing.lg },
   logoWrap: { alignItems: 'center', gap: Spacing.sm },
-  logoMark: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: Colors.electric,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.md,
-  },
-  logoMarkText: { fontSize: 24 },
-  logoText: { fontSize: FontSize['2xl'], fontWeight: FontWeight.extrabold, color: Colors.textPrimary, letterSpacing: -0.5 },
-  logoDot: { color: Colors.electric },
+  logoMark: { width: 64, height: 64 },
+  logoText: { width: 160, height: 36 },
   steps: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
   step: { width: 28, height: 4, borderRadius: 2, backgroundColor: Colors.border },
   stepActive: { backgroundColor: Colors.electric },
