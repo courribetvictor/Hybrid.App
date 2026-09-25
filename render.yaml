@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: hybrid-app
+    runtime: static
+    buildCommand: npm ci --legacy-peer-deps && npm run build:web
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: EXPO_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: EXPO_PUBLIC_SUPABASE_ANON_KEY
+        sync: false

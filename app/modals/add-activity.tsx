@@ -1,0 +1,577 @@
+import React, { useState, useCallback, useRef } from 'react'
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native'
+import { router } from 'expo-router'
+import * as Haptics from 'expo-haptics'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
+import { Button } from '@/components/ui/Button'
+import { useActivities } from '@/hooks/useActivities'
+import { useT } from '@/lib/i18n'
+import type { SportType, GymExercise, BadmintonSet, ActivityMetrics } from '@/types/database'
+
+// ── Sport config ──────────────────────────────────────────────
+
+const SPORTS: { key: SportType; emoji: string; label: string }[] = [
+  { key: 'running',   emoji: '🏃', label: 'Course' },
+  { key: 'cycling',   emoji: '🚴', label: 'Vélo' },
+  { key: 'swimming',  emoji: '🏊', label: 'Natation' },
+  { key: 'gym',       emoji: '🏋️', label: 'Muscu' },
+  { key: 'badminton', emoji: '🏸', label: 'Badminton' },
+  { key: 'athletics', emoji: '⚡', label: 'Athlétisme' },
+]
+
+// Replace with auth context
+const CURRENT_USER_ID = 'placeholder-user-id'
+
+// ── Component ─────────────────────────────────────────────────
+
+export default function AddActivityModal() {
+  const t = useT()
+  const { addActivity } = useActivities(CURRENT_USER_ID)
+
+  const [sport, setSport] = useState<SportType | null>(null)
+  const [durationMin, setDurationMin] = useState('')
+  const [calories, setCalories] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Endurance fields
+  const [distanceKm, setDistanceKm] = useState('')
+  const [avgHeartRate, setAvgHeartRate] = useState('')
+
+  // Gym fields
+  const [exercises, setExercises] = useState<GymExercise[]>([])
+
+  // Badminton fields
+  const [sets, setBadmintonSets] = useState<BadmintonSet[]>([{ player_score: 0, opponent_score: 0 }])
+  const [matchWon, setMatchWon] = useState<boolean | null>(null)
+
+  // Athletics fields
+  const [event, setEvent] = useState('')
+  const [resultValue, setResultValue] = useState('')
+
+  const handleSave = useCallback(async () => {
+    if (!sport) return
+    const dur = parseInt(durationMin) * 60
+    if (!dur || dur <= 0) {
+      Alert.alert('Durée invalide', 'Merci de saisir une durée en minutes.')
+      return
+    }
+
+    let metrics: ActivityMetrics
+    if (sport === 'running' || sport === 'cycling' || sport === 'swimming') {
+      metrics = {
+        distance_m: parseFloat(distanceKm) * 1000 || 0,
+        avg_heart_rate: parseInt(avgHeartRate) || undefined,
+      }
+    } else if (sport === 'gym') {
+      const totalVolume = exercises.reduce((sum, ex) => {
+        return sum + ex.sets.reduce((s, st) => s + st.reps * st.weight_kg, 0)
+      }, 0)
+      metrics = { exercises, total_volume_kg: totalVolume }
+    } else if (sport === 'badminton') {
+      metrics = { sets, match_won: matchWon ?? false }
+    } else {
+      metrics = {
+        event,
+        result_value: parseFloat(resultValue) || 0,
+        result_unit: 's',
+      }
+    }
+
+    try {
+      setLoading(true)
+      await addActivity({
+        sport_type: sport,
+        duration_seconds: dur,
+        calories_burned: parseInt(calories) || null,
+        metrics,
+      })
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      router.back()
+    } catch (e: any) {
+      Alert.alert('Erreur', e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [sport, durationMin, calories, distanceKm, avgHeartRate, exercises, sets, matchWon, event, resultValue, addActivity])
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.wrapper}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* Handle bar */}
+      <View style={styles.handle} />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>{t.activity.addActivity}</Text>
+
+        {/* Sport selector */}
+        <Text style={styles.sectionLabel}>{t.activity.selectSport}</Text>
+        <View style={styles.sportGrid}>
+          {SPORTS.map(s => (
+            <SportChip
+              key={s.key}
+              emoji={s.emoji}
+              label={s.label}
+              active={sport === s.key}
+              onPress={() => setSport(s.key)}
+            />
+          ))}
+        </View>
+
+        {sport && (
+          <>
+            {/* Common fields */}
+            <View style={styles.row}>
+              <Field
+                label={`${t.activity.duration} (min)`}
+                value={durationMin}
+                onChange={setDurationMin}
+                keyboardType="numeric"
+                placeholder="30"
+              />
+              <Field
+                label={t.activity.caloriesBurned}
+                value={calories}
+                onChange={setCalories}
+                keyboardType="numeric"
+                placeholder="300"
+              />
+            </View>
+
+            {/* Sport-specific fields */}
+            {(sport === 'running' || sport === 'cycling' || sport === 'swimming') && (
+              <EnduranceFields
+                distanceKm={distanceKm}
+                onDistanceChange={setDistanceKm}
+                heartRate={avgHeartRate}
+                onHeartRateChange={setAvgHeartRate}
+                t={t}
+              />
+            )}
+
+            {sport === 'gym' && (
+              <GymFields exercises={exercises} onChange={setExercises} t={t} />
+            )}
+
+            {sport === 'badminton' && (
+              <BadmintonFields
+                sets={sets}
+                onSetsChange={setBadmintonSets}
+                won={matchWon}
+                onWonChange={setMatchWon}
+                t={t}
+              />
+            )}
+
+            {sport === 'athletics' && (
+              <AthleticsFields
+                event={event}
+                onEventChange={setEvent}
+                result={resultValue}
+                onResultChange={setResultValue}
+                t={t}
+              />
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Footer CTA */}
+      <View style={styles.footer}>
+        <Button
+          label={t.common.cancel}
+          variant="ghost"
+          style={styles.footerBtn}
+          onPress={() => router.back()}
+        />
+        <Button
+          label={t.common.save}
+          variant="primary"
+          style={styles.footerBtn}
+          onPress={handleSave}
+          loading={loading}
+          disabled={!sport}
+        />
+      </View>
+    </KeyboardAvoidingView>
+  )
+}
+
+// ── Sub-forms ─────────────────────────────────────────────────
+
+function EnduranceFields({ distanceKm, onDistanceChange, heartRate, onHeartRateChange, t }: any) {
+  return (
+    <View style={styles.row}>
+      <Field
+        label={`${t.activity.distance} (km)`}
+        value={distanceKm}
+        onChange={onDistanceChange}
+        keyboardType="decimal-pad"
+        placeholder="10.5"
+      />
+      <Field
+        label={`${t.activity.heartRate} (bpm)`}
+        value={heartRate}
+        onChange={onHeartRateChange}
+        keyboardType="numeric"
+        placeholder="155"
+      />
+    </View>
+  )
+}
+
+function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onChange: (e: GymExercise[]) => void; t: any }) {
+  const addExercise = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    onChange([...exercises, { name: '', sets: [{ reps: 0, weight_kg: 0 }] }])
+  }
+
+  const updateExerciseName = (idx: number, name: string) => {
+    const next = [...exercises]
+    next[idx] = { ...next[idx], name }
+    onChange(next)
+  }
+
+  const addSet = (exIdx: number) => {
+    const next = [...exercises]
+    next[exIdx] = { ...next[exIdx], sets: [...next[exIdx].sets, { reps: 0, weight_kg: 0 }] }
+    onChange(next)
+  }
+
+  const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weight_kg', value: string) => {
+    const next = [...exercises]
+    const sets = [...next[exIdx].sets]
+    sets[setIdx] = { ...sets[setIdx], [field]: parseFloat(value) || 0 }
+    next[exIdx] = { ...next[exIdx], sets }
+    onChange(next)
+  }
+
+  return (
+    <View style={styles.section}>
+      {exercises.map((ex, ei) => (
+        <View key={ei} style={styles.exerciseCard}>
+          <TextInput
+            style={styles.exerciseName}
+            value={ex.name}
+            onChangeText={v => updateExerciseName(ei, v)}
+            placeholder="Développé couché, Squat…"
+            placeholderTextColor={Colors.textTertiary}
+          />
+          {ex.sets.map((s, si) => (
+            <View key={si} style={styles.setRow}>
+              <Text style={styles.setIndex}>#{si + 1}</Text>
+              <SmallField
+                value={s.reps > 0 ? String(s.reps) : ''}
+                onChange={v => updateSet(ei, si, 'reps', v)}
+                placeholder="Reps"
+              />
+              <SmallField
+                value={s.weight_kg > 0 ? String(s.weight_kg) : ''}
+                onChange={v => updateSet(ei, si, 'weight_kg', v)}
+                placeholder="kg"
+              />
+            </View>
+          ))}
+          <TouchableOpacity onPress={() => addSet(ei)} style={styles.addSetBtn}>
+            <Text style={styles.addSetText}>+ {t.activity.addSet}</Text>
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      <Button label={`+ ${t.activity.addExercise}`} variant="secondary" onPress={addExercise} />
+    </View>
+  )
+}
+
+function BadmintonFields({ sets, onSetsChange, won, onWonChange, t }: any) {
+  const addSet = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    onSetsChange([...sets, { player_score: 0, opponent_score: 0 }])
+  }
+
+  const updateSet = (idx: number, field: 'player_score' | 'opponent_score', value: string) => {
+    const next = [...sets]
+    next[idx] = { ...next[idx], [field]: parseInt(value) || 0 }
+    onSetsChange(next)
+  }
+
+  return (
+    <View style={styles.section}>
+      {sets.map((s: BadmintonSet, i: number) => (
+        <View key={i} style={styles.setRow}>
+          <Text style={styles.setIndex}>Set {i + 1}</Text>
+          <SmallField
+            value={s.player_score > 0 ? String(s.player_score) : ''}
+            onChange={v => updateSet(i, 'player_score', v)}
+            placeholder="Moi"
+          />
+          <Text style={{ color: Colors.textTertiary }}>–</Text>
+          <SmallField
+            value={s.opponent_score > 0 ? String(s.opponent_score) : ''}
+            onChange={v => updateSet(i, 'opponent_score', v)}
+            placeholder="Adv."
+          />
+        </View>
+      ))}
+
+      <Button label="+ Set" variant="secondary" size="sm" onPress={addSet} style={{ alignSelf: 'flex-start' }} />
+
+      {/* Win/Loss toggle */}
+      <View style={styles.toggleRow}>
+        {([true, false] as const).map(val => (
+          <TouchableOpacity
+            key={String(val)}
+            style={[styles.toggleBtn, won === val && styles.toggleBtnActive]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onWonChange(val) }}
+          >
+            <Text style={[styles.toggleText, won === val && styles.toggleTextActive]}>
+              {val ? t.activity.won : t.activity.lost}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function AthleticsFields({ event, onEventChange, result, onResultChange, t }: any) {
+  return (
+    <View style={styles.row}>
+      <Field
+        label={t.activity.event}
+        value={event}
+        onChange={onEventChange}
+        placeholder="100m, Saut en longueur…"
+      />
+      <Field
+        label={t.activity.result}
+        value={result}
+        onChange={onResultChange}
+        keyboardType="decimal-pad"
+        placeholder="9.85"
+      />
+    </View>
+  )
+}
+
+// ── Shared input atoms ────────────────────────────────────────
+
+function Field({ label, value, onChange, keyboardType = 'default', placeholder }: any) {
+  return (
+    <View style={fieldStyles.wrapper}>
+      <Text style={fieldStyles.label}>{label}</Text>
+      <TextInput
+        style={fieldStyles.input}
+        value={value}
+        onChangeText={onChange}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textTertiary}
+      />
+    </View>
+  )
+}
+
+function SmallField({ value, onChange, placeholder }: any) {
+  return (
+    <TextInput
+      style={fieldStyles.small}
+      value={value}
+      onChangeText={onChange}
+      keyboardType="decimal-pad"
+      placeholder={placeholder}
+      placeholderTextColor={Colors.textTertiary}
+    />
+  )
+}
+
+function SportChip({ emoji, label, active, onPress }: any) {
+  return (
+    <TouchableOpacity
+      style={[chipStyles.chip, active && chipStyles.active]}
+      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress() }}
+      activeOpacity={0.75}
+    >
+      <Text style={chipStyles.emoji}>{emoji}</Text>
+      <Text style={[chipStyles.label, active && chipStyles.labelActive]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
+// ── Styles ────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: Spacing.sm,
+  },
+  content: {
+    padding: Spacing.md,
+    paddingBottom: Spacing['2xl'],
+    gap: Spacing.md,
+  },
+  title: {
+    fontSize: FontSize['2xl'],
+    fontWeight: FontWeight.bold,
+    color: Colors.textPrimary,
+  },
+  sectionLabel: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textSecondary,
+  },
+  sportGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  section: {
+    gap: Spacing.sm,
+  },
+  exerciseCard: {
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  exerciseName: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
+    color: Colors.textPrimary,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingBottom: 6,
+  },
+  setRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  setIndex: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    width: 28,
+  },
+  addSetBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  addSetText: {
+    fontSize: FontSize.sm,
+    color: Colors.electric,
+    fontWeight: FontWeight.medium,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  toggleBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+    alignItems: 'center',
+  },
+  toggleBtnActive: {
+    backgroundColor: Colors.electric,
+  },
+  toggleText: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: Colors.textInverse,
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  footerBtn: {
+    flex: 1,
+  },
+})
+
+const fieldStyles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    gap: 6,
+  },
+  label: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textSecondary,
+  },
+  input: {
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    fontSize: FontSize.md,
+    color: Colors.textPrimary,
+  },
+  small: {
+    flex: 1,
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    fontSize: FontSize.md,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+})
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+    gap: 4,
+    minWidth: 80,
+  },
+  active: {
+    backgroundColor: Colors.electric,
+  },
+  emoji: {
+    fontSize: 22,
+  },
+  label: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    color: Colors.textSecondary,
+  },
+  labelActive: {
+    color: Colors.textInverse,
+  },
+})
