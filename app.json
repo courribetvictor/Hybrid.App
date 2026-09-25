@@ -47,7 +47,7 @@
       "policy": "appVersion"
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "bundler": "metro"
     },
     "experiments": {
