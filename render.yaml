@@ -5,6 +5,10 @@ services:
     buildCommand: npm ci --legacy-peer-deps && npm run build:web
     staticPublishPath: dist
     pullRequestPreviewsEnabled: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: EXPO_PUBLIC_SUPABASE_URL
         sync: false
