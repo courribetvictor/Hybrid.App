@@ -86,7 +86,18 @@ export default function RegisterScreen() {
     }
 
     setLoading(false)
-    router.replace('/(tabs)')
+
+    // Si confirmation email désactivée → session active directement
+    if (data.session) {
+      router.replace('/(tabs)')
+    } else {
+      // Email de confirmation envoyé
+      Alert.alert(
+        'Vérifie tes emails 📬',
+        'Un lien de confirmation a été envoyé à ' + email.trim() + '. Clique dessus puis reviens te connecter.',
+        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+      )
+    }
   }, [email, password, username])
 
   return (
