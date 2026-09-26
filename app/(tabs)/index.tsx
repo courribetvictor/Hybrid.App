@@ -180,8 +180,8 @@ export default function FeedScreen() {
         title="Accueil"
         right={
           <>
-            <HeaderIconBtn icon="🔍" onPress={() => {}} />
-            <HeaderIconBtn icon="🔔" badge />
+            <HeaderIconBtn icon="🔍" onPress={() => router.push('/modals/search' as any)} />
+            <HeaderIconBtn icon="🔔" onPress={() => router.push('/modals/notifications' as any)} badge />
             <TouchableOpacity
               onPress={() => router.push('/vous' as any)}
               activeOpacity={0.8}
