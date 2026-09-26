@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -20,15 +20,23 @@ import * as Haptics from 'expo-haptics'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { ActivityCard } from '@/components/feed/ActivityCard'
+import { PostCard } from '@/components/feed/PostCard'
+import { CreatePostModal } from '@/components/feed/CreatePostModal'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { useFriendFeed, useActivities } from '@/hooks/useActivities'
 import { useFriendships } from '@/hooks/useFriendships'
+import { useFollows } from '@/hooks/useFollows'
 import { useProfile, useSession } from '@/hooks/useProfile'
 import { useWeeklyGoal } from '@/hooks/useGoal'
+import { usePostFeed } from '@/hooks/usePosts'
 import type { GoalConfig } from '@/hooks/useGoal'
-import type { Activity, ActivityWithProfile, SportType } from '@/types/database'
+import type { Activity, ActivityWithProfile, PostWithProfile, SportType } from '@/types/database'
 
-const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<ActivityWithProfile>)
+type FeedItem =
+  | { kind: 'post';     data: PostWithProfile;     id: string }
+  | { kind: 'activity'; data: ActivityWithProfile; id: string }
+
+const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<FeedItem>)
 
 // ── Streak helper ─────────────────────────────────────────────
 
@@ -60,10 +68,15 @@ export default function FeedScreen() {
   const { userId } = useSession()
   const { profile } = useProfile(userId ?? undefined)
   const { friendIds } = useFriendships(userId ?? undefined)
-  const { feed, loading, refetch } = useFriendFeed(friendIds)
+  const { following } = useFollows(userId ?? undefined)
+  const followingIds = useMemo(() => following.map(f => f.userId), [following])
+  const { feed: activityFeed, loading: actLoading, refetch: refetchActs } = useFriendFeed(friendIds)
   const { activities: ownActivities, refetch: refetchOwn } = useActivities(userId ?? undefined, 7)
   const { goal } = useWeeklyGoal()
+  const { posts, loading: postLoading, createPost, toggleLike, deletePost, refetch: refetchPosts } =
+    usePostFeed(userId ?? undefined, followingIds)
 
+  const [postModalVisible, setPostModalVisible] = useState(false)
   const scrollY = useSharedValue(0)
   const fabScale = useSharedValue(1)
 
@@ -78,6 +91,28 @@ export default function FeedScreen() {
     ],
   }))
 
+  // Merge posts + activities into ranked feed
+  const mergedFeed = useMemo((): FeedItem[] => {
+    const followSet = new Set(followingIds)
+    const now = Date.now()
+
+    const postItems: FeedItem[] = posts.map(p => {
+      const ageH = (now - new Date(p.created_at).getTime()) / 3_600_000
+      const score = (followSet.has(p.user_id) ? 200 : 0) + p.likes_count * 3 + Math.max(0, 1 - ageH / 168) * 80
+      return { kind: 'post', data: p, id: `post_${p.id}`, score } as any
+    })
+
+    const actItems: FeedItem[] = (activityFeed as ActivityWithProfile[]).map(a => {
+      const ageH = (now - new Date(a.created_at).getTime()) / 3_600_000
+      const score = (followSet.has(a.user_id) ? 200 : 0) + Math.max(0, 1 - ageH / 168) * 60
+      return { kind: 'activity', data: a, id: `act_${a.id}`, score } as any
+    })
+
+    const merged = [...postItems, ...actItems]
+    merged.sort((a: any, b: any) => b.score - a.score)
+    return merged
+  }, [posts, activityFeed, followingIds])
+
   const handleFab = useCallback(() => {
     fabScale.value = withSpring(0.88, { damping: 8, stiffness: 500 }, () => {
       fabScale.value = withSpring(1, { damping: 10, stiffness: 300 })
@@ -86,21 +121,48 @@ export default function FeedScreen() {
     router.push('/modals/add-activity')
   }, [fabScale])
 
+  const handlePostBtn = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setPostModalVisible(true)
+  }, [])
+
   const handleRefresh = useCallback(() => {
-    refetch()
+    refetchActs()
     refetchOwn()
-  }, [refetch, refetchOwn])
+    refetchPosts()
+  }, [refetchActs, refetchOwn, refetchPosts])
 
   const renderItem = useCallback(
-    ({ item }: { item: ActivityWithProfile }) => <ActivityCard activity={item} />,
-    [],
+    ({ item }: { item: FeedItem }) => {
+      if (item.kind === 'post') {
+        return (
+          <PostCard
+            post={item.data as PostWithProfile}
+            currentUserId={userId ?? undefined}
+            onLike={toggleLike}
+            onDelete={deletePost}
+          />
+        )
+      }
+      return <ActivityCard activity={item.data as ActivityWithProfile} />
+    },
+    [userId, toggleLike, deletePost],
   )
 
+  const loading = actLoading || postLoading
+
   const header = (
-    <WeekSummaryBanner
-      activities={ownActivities}
-      goal={goal}
-    />
+    <>
+      <WeekSummaryBanner activities={ownActivities} goal={goal} />
+      {/* Quick post button */}
+      <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.8}>
+        <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={32} />
+        <Text style={feedStyles.postBarHint}>Partager quelque chose…</Text>
+        <View style={feedStyles.postBarBtn}>
+          <Text style={feedStyles.postBarBtnTxt}>Publier</Text>
+        </View>
+      </TouchableOpacity>
+    </>
   )
 
   return (
@@ -120,7 +182,7 @@ export default function FeedScreen() {
       />
 
       <AnimatedFlatList
-        data={feed as ActivityWithProfile[]}
+        data={mergedFeed}
         renderItem={renderItem}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
@@ -140,6 +202,12 @@ export default function FeedScreen() {
           <Text style={styles.fabIcon}>+</Text>
         </TouchableOpacity>
       </Animated.View>
+
+      <CreatePostModal
+        visible={postModalVisible}
+        onClose={() => setPostModalVisible(false)}
+        onSubmit={createPost}
+      />
     </View>
   )
 }
@@ -162,17 +230,20 @@ const GOAL_TYPE_EMOJI: Record<string, string> = {
 }
 
 function computeGoalProgress(goal: GoalConfig, activities: Activity[]): { current: number; progress: number } {
+  const filtered = goal.sport && goal.sport !== 'all'
+    ? activities.filter(a => a.sport_type === goal.sport)
+    : activities
   switch (goal.type) {
     case 'sessions': {
-      const current = activities.length
+      const current = filtered.length
       return { current, progress: Math.min(current / goal.value, 1) }
     }
     case 'minutes': {
-      const current = Math.round(activities.reduce((s, a) => s + a.duration_seconds, 0) / 60)
+      const current = Math.round(filtered.reduce((s, a) => s + a.duration_seconds, 0) / 60)
       return { current, progress: Math.min(current / goal.value, 1) }
     }
     case 'km': {
-      const current = parseFloat(activities.reduce((s, a) => {
+      const current = parseFloat(filtered.reduce((s, a) => {
         const m = (a as any).metrics
         return s + (m?.distance_m ? m.distance_m / 1000 : 0)
       }, 0).toFixed(1))
@@ -299,7 +370,7 @@ function WeekSummaryBanner({
         <View style={bannerStyles.goalWrap}>
           <View style={bannerStyles.goalHeader}>
             <Text style={bannerStyles.goalLabel}>
-              {GOAL_TYPE_EMOJI[goal.type]} Objectif {GOAL_TYPE_LABEL[goal.type]}/sem.
+              {GOAL_TYPE_EMOJI[goal.type]} Objectif {GOAL_TYPE_LABEL[goal.type]}/sem.{goal.sport && goal.sport !== 'all' ? ` · ${SPORT_EMOJI[goal.sport as keyof typeof SPORT_EMOJI] ?? ''}` : ''}
             </Text>
             <Text style={bannerStyles.goalCount}>
               {goalResult.current} / {goal.value} {GOAL_TYPE_LABEL[goal.type]}
@@ -328,6 +399,32 @@ function EmptyFeed() {
 }
 
 // ── Styles ────────────────────────────────────────────────────
+
+const feedStyles = StyleSheet.create({
+  postBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Shadow.sm,
+  },
+  postBarHint: {
+    flex: 1,
+    fontSize: FontSize.sm,
+    color: Colors.textTertiary,
+  },
+  postBarBtn: {
+    backgroundColor: Colors.electric,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  postBarBtnTxt: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+})
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bgAlt },

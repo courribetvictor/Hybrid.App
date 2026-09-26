@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -24,6 +25,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
 import { useWeeklyGoal } from '@/hooks/useGoal'
 import type { GoalConfig, GoalType } from '@/hooks/useGoal'
+import { SPORT_GOAL_OPTIONS, GLOBAL_GOAL_OPTIONS } from '@/constants/exercises'
 import { useFollows } from '@/hooks/useFollows'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
@@ -202,43 +204,53 @@ export default function ProfileScreen() {
   const [goalVisible, setGoalVisible] = useState(false)
   const [avatarUploading, setAvatarUploading] = useState(false)
 
-  const handleAvatarPress = useCallback(async () => {
+  const pickAndUploadAvatar = useCallback(async () => {
     if (!userId) return
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!permission.granted) return
+    if (!permission.granted) {
+      Alert.alert('Permission requise', 'Autorise l\'accès à la galerie dans les réglages.')
+      return
+    }
+    // allowsEditing:false avoids the cropper which causes black screen on iOS inside a Modal
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-      base64: true,
+      mediaTypes: ['images'] as any,
+      allowsEditing: false,
+      quality: 0.75,
     })
-    if (result.canceled || !result.assets[0] || !result.assets[0].base64) return
+    if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
-    const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const rawExt = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const ext = rawExt === 'jpeg' ? 'jpg' : rawExt
     const path = `${userId}/avatar.${ext}`
     setAvatarUploading(true)
     try {
-      const b64 = asset.base64!
-      const byteCharacters = atob(b64)
-      const byteNumbers = new Uint8Array(byteCharacters.length)
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i)
-      }
+      const blob = await fetch(asset.uri).then(r => r.blob())
       const { error: upErr } = await supabase.storage
         .from('avatars')
-        .upload(path, byteNumbers, { contentType: `image/${ext}`, upsert: true })
+        .upload(path, blob, { contentType: `image/${ext}`, upsert: true })
       if (upErr) throw upErr
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
       await updateProfile({ avatar_url: publicUrl + `?t=${Date.now()}` })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     } catch (e) {
       console.warn('Avatar upload failed:', e)
+      Alert.alert('Erreur', 'Impossible de télécharger la photo. Vérifie ta connexion.')
     } finally {
       setAvatarUploading(false)
     }
   }, [userId, updateProfile])
+
+  const handleAvatarPress = useCallback(() => {
+    if (!userId) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    // Close modal first — calling ImagePicker from inside a Modal causes black screen on iOS
+    if (editVisible) {
+      setEditVisible(false)
+      setTimeout(pickAndUploadAvatar, 350)
+    } else {
+      pickAndUploadAvatar()
+    }
+  }, [userId, editVisible, pickAndUploadAvatar])
 
   const unit = profile?.preferred_unit ?? 'metric'
   const lang = profile?.preferred_language ?? 'fr'
@@ -292,7 +304,10 @@ export default function ProfileScreen() {
     const monday = new Date()
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
     monday.setHours(0, 0, 0, 0)
-    const weekActs = (activities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+    const allWeek = (activities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+    const weekActs = goal?.sport && goal.sport !== 'all'
+      ? allWeek.filter(a => a.sport_type === goal.sport)
+      : allWeek
     const sessions = weekActs.length
     const minutes = Math.round(weekActs.reduce((s, a) => s + a.duration_seconds, 0) / 60)
     const km = parseFloat(weekActs.reduce((s, a) => {
@@ -300,7 +315,7 @@ export default function ProfileScreen() {
       return s + (m?.distance_m ? m.distance_m / 1000 : 0)
     }, 0).toFixed(1))
     return { sessions, minutes, km }
-  }, [activities])
+  }, [activities, goal?.sport])
 
   const goalCurrentValue = goal
     ? goal.type === 'sessions' ? thisWeekData.sessions
@@ -436,16 +451,29 @@ export default function ProfileScreen() {
               <View style={goalStyles.top}>
                 <View style={goalStyles.typeTag}>
                   <Text style={goalStyles.typeEmoji}>
-                    {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.emoji ?? '🎯'}
+                    {(() => {
+                      const s = goal.sport && goal.sport !== 'all' ? SPORT_GOAL_OPTIONS[goal.sport as SportType] : null
+                      const opts = s ?? GLOBAL_GOAL_OPTIONS
+                      return opts.find(o => o.type === goal.type)?.emoji ?? '🎯'
+                    })()}
                   </Text>
                   <Text style={goalStyles.typeLabel}>
-                    Objectif {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.label ?? ''}
+                    {GOAL_SPORT_LIST.find(s => s.key === (goal.sport ?? 'all'))?.emoji ?? ''}{' '}
+                    {(() => {
+                      const s = goal.sport && goal.sport !== 'all' ? SPORT_GOAL_OPTIONS[goal.sport as SportType] : null
+                      const opts = s ?? GLOBAL_GOAL_OPTIONS
+                      return opts.find(o => o.type === goal.type)?.label ?? ''
+                    })()}
                   </Text>
                 </View>
                 <View style={goalStyles.valueWrap}>
                   <Text style={goalStyles.goalNum}>{goal.value}</Text>
                   <Text style={goalStyles.goalUnit}>
-                    {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.unit ?? ''}/sem.
+                    {(() => {
+                      const s = goal.sport && goal.sport !== 'all' ? SPORT_GOAL_OPTIONS[goal.sport as SportType] : null
+                      const opts = s ?? GLOBAL_GOAL_OPTIONS
+                      return opts.find(o => o.type === goal.type)?.unit ?? ''
+                    })()}/sem.
                   </Text>
                 </View>
               </View>
@@ -576,7 +604,7 @@ export default function ProfileScreen() {
           <ActionRow
             icon="📊"
             label="Objectif hebdomadaire"
-            badge={goal ? `${goal.value} ${GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.unit ?? ''}` : undefined}
+            badge={goal ? `${goal.value} ${(goal.sport && goal.sport !== 'all' ? SPORT_GOAL_OPTIONS[goal.sport as SportType] : GLOBAL_GOAL_OPTIONS).find(o => o.type === goal.type)?.unit ?? ''}` : undefined}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               setGoalVisible(true)
@@ -700,6 +728,21 @@ function BodyMetric({ label, value, sub, subColor }: { label: string; value: str
 
 // ── Goal Modal ────────────────────────────────────────────────
 
+const GOAL_SPORT_LIST: { key: SportType | 'all'; label: string; emoji: string }[] = [
+  { key: 'all',      label: 'Tous',       emoji: '🌐' },
+  { key: 'running',  label: 'Course',     emoji: '🏃' },
+  { key: 'cycling',  label: 'Vélo',       emoji: '🚴' },
+  { key: 'swimming', label: 'Natation',   emoji: '🏊' },
+  { key: 'gym',      label: 'Muscu',      emoji: '🏋️' },
+  { key: 'hiking',   label: 'Rando',      emoji: '🥾' },
+  { key: 'football', label: 'Football',   emoji: '⚽' },
+  { key: 'tennis',   label: 'Tennis',     emoji: '🎾' },
+  { key: 'badminton',label: 'Badminton',  emoji: '🏸' },
+  { key: 'boxing',   label: 'Boxe',       emoji: '🥊' },
+  { key: 'athletics',label: 'Athlé.',     emoji: '⚡' },
+  { key: 'yoga',     label: 'Yoga',       emoji: '🧘' },
+]
+
 function GoalModal({
   visible, current, onSave, onClear, onClose,
 }: {
@@ -709,110 +752,144 @@ function GoalModal({
   onClear: () => void
   onClose: () => void
 }) {
+  const [selectedSport, setSelectedSport] = useState<SportType | 'all'>(current?.sport ?? 'all')
   const [selectedType, setSelectedType] = useState<GoalType>(current?.type ?? 'sessions')
   const [customVal, setCustomVal] = useState('')
 
   useEffect(() => {
     if (visible) {
+      setSelectedSport(current?.sport ?? 'all')
       setSelectedType(current?.type ?? 'sessions')
       setCustomVal('')
     }
   }, [visible, current])
 
-  const typeInfo = GOAL_TYPE_OPTIONS.find(g => g.type === selectedType)!
+  const sportOptions = selectedSport === 'all'
+    ? GLOBAL_GOAL_OPTIONS
+    : (SPORT_GOAL_OPTIONS[selectedSport as SportType] ?? GLOBAL_GOAL_OPTIONS)
+
+  // Reset type if current type not available for new sport
+  useEffect(() => {
+    if (!sportOptions.find(o => o.type === selectedType)) {
+      setSelectedType(sportOptions[0]?.type as GoalType ?? 'sessions')
+    }
+  }, [selectedSport, sportOptions, selectedType])
+
+  const typeInfo = sportOptions.find(o => o.type === selectedType) ?? sportOptions[0]
+
+  const handleSave = (value: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    onSave({ type: selectedType as GoalType, value, sport: selectedSport })
+  }
 
   const handleCustomSave = () => {
     const v = parseInt(customVal)
-    if (!isNaN(v) && v > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-      onSave({ type: selectedType, value: v })
-    }
+    if (!isNaN(v) && v > 0) handleSave(v)
   }
 
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={sheetStyles.overlay}>
-        <TouchableOpacity style={sheetStyles.backdrop} onPress={onClose} activeOpacity={1} />
-        <View style={sheetStyles.sheet}>
-          <View style={sheetStyles.handle} />
-          <Text style={sheetStyles.sheetTitle}>🎯 Objectif hebdomadaire</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <View style={sheetStyles.overlay}>
+          <TouchableOpacity style={sheetStyles.backdrop} onPress={onClose} activeOpacity={1} />
+          <View style={[sheetStyles.sheet, { maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={sheetStyles.handle} />
+              <Text style={sheetStyles.sheetTitle}>🎯 Objectif hebdomadaire</Text>
 
-          {/* Type selector */}
-          <View style={goalModalStyles.typeRow}>
-            {GOAL_TYPE_OPTIONS.map(opt => (
-              <TouchableOpacity
-                key={opt.type}
-                style={[goalModalStyles.typeChip, selectedType === opt.type && goalModalStyles.typeChipActive]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedType(opt.type) }}
-                activeOpacity={0.75}
-              >
-                <Text style={goalModalStyles.typeEmoji}>{opt.emoji}</Text>
-                <Text style={[goalModalStyles.typeLabel, selectedType === opt.type && goalModalStyles.typeLabelActive]}>
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+              {/* Sport selector */}
+              <Text style={goalModalStyles.sectionLabel}>Pour quel sport ?</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={goalModalStyles.sportRow}>
+                {GOAL_SPORT_LIST.map(s => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[goalModalStyles.sportChip, selectedSport === s.key && goalModalStyles.sportChipActive]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedSport(s.key) }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={goalModalStyles.typeEmoji}>{s.emoji}</Text>
+                    <Text style={[goalModalStyles.typeLabel, selectedSport === s.key && goalModalStyles.typeLabelActive]}>
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Metric type selector */}
+              <Text style={goalModalStyles.sectionLabel}>Mesure</Text>
+              <View style={goalModalStyles.typeRow}>
+                {sportOptions.map(opt => (
+                  <TouchableOpacity
+                    key={opt.type}
+                    style={[goalModalStyles.typeChip, selectedType === opt.type && goalModalStyles.typeChipActive]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedType(opt.type as GoalType) }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={goalModalStyles.typeEmoji}>{opt.emoji}</Text>
+                    <Text style={[goalModalStyles.typeLabel, selectedType === opt.type && goalModalStyles.typeLabelActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[sheetStyles.note, { textAlign: 'left', marginBottom: 0 }]}>
+                {typeInfo?.unit ?? ''} par semaine
+              </Text>
+
+              {/* Value grid */}
+              <View style={goalModalStyles.grid}>
+                {(typeInfo?.values ?? []).map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[
+                      goalModalStyles.option,
+                      current?.type === selectedType && current?.value === n && current?.sport === selectedSport && goalModalStyles.optionActive,
+                    ]}
+                    onPress={() => handleSave(n)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[
+                      goalModalStyles.optionNum,
+                      current?.type === selectedType && current?.value === n && current?.sport === selectedSport && goalModalStyles.optionNumActive,
+                    ]}>
+                      {n}
+                    </Text>
+                    <Text style={[
+                      goalModalStyles.optionLabel,
+                      current?.type === selectedType && current?.value === n && current?.sport === selectedSport && goalModalStyles.optionLabelActive,
+                    ]}>
+                      {typeInfo?.unit ?? ''}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Custom value */}
+              <View style={goalModalStyles.customRow}>
+                <TextInput
+                  style={goalModalStyles.customInput}
+                  value={customVal}
+                  onChangeText={setCustomVal}
+                  placeholder={`Valeur personnalisée (${typeInfo?.unit ?? ''})`}
+                  placeholderTextColor={Colors.textTertiary}
+                  keyboardType="number-pad"
+                />
+                <TouchableOpacity style={goalModalStyles.customBtn} onPress={handleCustomSave} activeOpacity={0.8}>
+                  <Text style={goalModalStyles.customBtnText}>OK</Text>
+                </TouchableOpacity>
+              </View>
+
+              {current !== null && (
+                <TouchableOpacity onPress={onClear} style={sheetStyles.cancelWrap} activeOpacity={0.7}>
+                  <Text style={[sheetStyles.cancelText, { color: Colors.error }]}>Supprimer l'objectif</Text>
+                </TouchableOpacity>
+              )}
+              <Button label="Fermer" variant="ghost" onPress={onClose} style={{ marginTop: Spacing.xs }} />
+            </ScrollView>
           </View>
-
-          <Text style={[sheetStyles.note, { textAlign: 'left', marginBottom: 0 }]}>
-            {typeInfo.unit} par semaine
-          </Text>
-
-          {/* Value grid */}
-          <View style={goalModalStyles.grid}>
-            {GOAL_VALUES[selectedType].map(n => (
-              <TouchableOpacity
-                key={n}
-                style={[
-                  goalModalStyles.option,
-                  current?.type === selectedType && current?.value === n && goalModalStyles.optionActive,
-                ]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSave({ type: selectedType, value: n }) }}
-                activeOpacity={0.75}
-              >
-                <Text style={[
-                  goalModalStyles.optionNum,
-                  current?.type === selectedType && current?.value === n && goalModalStyles.optionNumActive,
-                ]}>
-                  {n}
-                </Text>
-                <Text style={[
-                  goalModalStyles.optionLabel,
-                  current?.type === selectedType && current?.value === n && goalModalStyles.optionLabelActive,
-                ]}>
-                  {typeInfo.unit}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Custom value */}
-          <View style={goalModalStyles.customRow}>
-            <TextInput
-              style={goalModalStyles.customInput}
-              value={customVal}
-              onChangeText={setCustomVal}
-              placeholder={`Valeur personnalisée (${typeInfo.unit})`}
-              placeholderTextColor={Colors.textTertiary}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity
-              style={goalModalStyles.customBtn}
-              onPress={handleCustomSave}
-              activeOpacity={0.8}
-            >
-              <Text style={goalModalStyles.customBtnText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-
-          {current !== null && (
-            <TouchableOpacity onPress={onClear} style={sheetStyles.cancelWrap} activeOpacity={0.7}>
-              <Text style={[sheetStyles.cancelText, { color: Colors.error }]}>Supprimer l'objectif</Text>
-            </TouchableOpacity>
-          )}
-          <Button label="Fermer" variant="ghost" onPress={onClose} style={{ marginTop: Spacing.xs }} />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   )
 }
@@ -1501,6 +1578,28 @@ const goalModalStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   customBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: '#fff' },
+  sectionLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  sportRow: { gap: Spacing.sm, paddingBottom: 8 },
+  sportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgAlt,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  sportChipActive: { borderColor: Colors.electric, backgroundColor: Colors.electricDim },
 })
 
 const sheetStyles = StyleSheet.create({

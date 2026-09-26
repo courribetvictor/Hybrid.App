@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native'
+import { router } from 'expo-router'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -8,7 +9,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from 'react-native-reanimated'
-import { LineChart, BarChart } from 'react-native-chart-kit'
+import { LineChart, BarChart, PieChart } from 'react-native-chart-kit'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { HeatmapView } from '@/components/lab/HeatmapView'
 import { SportStatsTab } from '@/components/lab/SportStatsTab'
@@ -64,7 +65,6 @@ export default function StatsScreen() {
 
   const swipe = Gesture.Pan()
     .activeOffsetX([-12, 12])
-    .failOffsetY([-8, 8])
     .onEnd(e => {
       'worklet'
       const idx = tabIndexSV.value
@@ -74,6 +74,9 @@ export default function StatsScreen() {
         runOnJS(switchTab)(TAB_KEYS[idx - 1])
       }
     })
+  // Simultaneous allows native vertical scroll AND horizontal swipe detection
+  const nativeScroll = Gesture.Native()
+  const swipeAndScroll = Gesture.Simultaneous(swipe, nativeScroll)
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
@@ -123,8 +126,8 @@ export default function StatsScreen() {
         ))}
       </View>
 
-      {/* Swipeable content */}
-      <GestureDetector gesture={swipe}>
+      {/* Swipeable content — Simultaneous allows vertical scroll to work */}
+      <GestureDetector gesture={swipeAndScroll}>
         <ScrollView
           key={tab}
           showsVerticalScrollIndicator={false}
@@ -143,7 +146,18 @@ export default function StatsScreen() {
             <BodyTab bodyLogs={bodyLogs} activities={activities} unit={unit} />
           )}
           {tab === 'sport' && (
-            <SportStatsTab activities={activities} unit={unit} />
+            <>
+              <TouchableOpacity
+                style={exerciseBtn.row}
+                onPress={() => router.push('/modals/exercises' as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={exerciseBtn.emoji}>📚</Text>
+                <Text style={exerciseBtn.label}>Base d'exercices</Text>
+                <Text style={exerciseBtn.arrow}>→</Text>
+              </TouchableOpacity>
+              <SportStatsTab activities={activities} unit={unit} />
+            </>
           )}
         </ScrollView>
       </GestureDetector>
@@ -173,37 +187,29 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
       {/* Heatmap */}
       <HeatmapView data={heatmapData} weeks={14} />
 
-      {/* Sport breakdown */}
-      <View style={card.box}>
-        <Text style={card.title}>Répartition des sports</Text>
-        {Object.keys(sportBreakdown).length > 0 ? (
-          (Object.entries(sportBreakdown) as [SportType, number][])
-            .sort((a, b) => b[1] - a[1])
-            .map(([sport, count]) => {
-              const pct = total > 0 ? Math.round((count / total) * 100) : 0
-              return (
-                <View key={sport} style={breakdown.row}>
-                  <Text style={breakdown.name}>{SPORT_LABEL[sport]}</Text>
-                  <View style={breakdown.barBg}>
-                    <View style={[breakdown.barFill, { width: `${pct}%`, backgroundColor: SportColors[sport] }]} />
-                  </View>
-                  <Text style={breakdown.pct}>{pct}%</Text>
-                </View>
-              )
-            })
-        ) : (
-          <EmptyBarChart label="Aucune séance encore enregistrée" />
-        )}
-      </View>
+      {/* Sport breakdown — pie chart */}
+      <SportPieChart sportBreakdown={sportBreakdown} total={total} />
 
-      {/* Weekly sessions chart - always shown */}
+      {/* Weekly sessions bar chart */}
       <WeeklyVolumeChart activities={activities} />
 
-      {/* Weekly duration chart - always shown */}
+      {/* Weekly duration bar chart */}
       <WeeklyDurationChart activities={activities} />
 
       {/* Personal records */}
       <PersonalRecords activities={activities} />
+
+      {/* Cumulative distance line chart */}
+      <CumulativeDistanceChart activities={activities} />
+
+      {/* Weekly calories bar chart */}
+      <WeeklyCaloriesChart activities={activities} />
+
+      {/* Sport time pie — time breakdown by sport */}
+      <SportTimePieChart activities={activities} />
+
+      {/* Session length distribution */}
+      <SessionLengthChart activities={activities} />
     </>
   )
 }
@@ -329,6 +335,75 @@ function PersonalRecords({ activities }: any) {
   )
 }
 
+function CumulativeDistanceChart({ activities }: any) {
+  const sorted = [...activities].sort((a: any, b: any) => a.created_at.localeCompare(b.created_at))
+  let cum = 0
+  const points: { label: string; value: number }[] = []
+  for (const a of sorted) {
+    const dist = (a.metrics?.distance_m ?? 0) / 1000
+    if (dist > 0) {
+      cum += dist
+      points.push({ label: a.created_at.slice(5, 10), value: parseFloat(cum.toFixed(1)) })
+    }
+  }
+  const sampled = points.length > 8 ? points.filter((_, i) => i % Math.ceil(points.length / 8) === 0 || i === points.length - 1) : points
+  const hasData = sampled.length >= 2
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>📈 Distance cumulée (km)</Text>
+      {!hasData && <Text style={card.emptyHint}>Données de course/vélo/natation requises</Text>}
+      <LineChart
+        data={{
+          labels: hasData ? sampled.map(p => p.label) : ['—', '—', '—', '—', '—', '—'],
+          datasets: [{ data: hasData ? sampled.map(p => p.value) : [0, 0, 0, 0, 0, 0] }],
+        }}
+        width={CHART_W} height={120}
+        chartConfig={chartCfg(Colors.electric, !hasData)}
+        bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        yAxisSuffix=" km" segments={3} fromZero
+      />
+    </View>
+  )
+}
+
+function WeeklyCaloriesChart({ activities }: any) {
+  const byWeek: Record<string, number> = {}
+  for (const a of activities) {
+    const d = new Date(a.created_at)
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const key = `${monday.getDate()}/${monday.getMonth() + 1}`
+    byWeek[key] = (byWeek[key] ?? 0) + (a.calories_burned ?? 0)
+  }
+  const now = new Date()
+  const weeks: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i * 7 - ((now.getDay() + 6) % 7))
+    weeks.push(`${d.getDate()}/${d.getMonth() + 1}`)
+  }
+  const vals = weeks.map(k => Math.round(byWeek[k] ?? 0))
+  const hasData = vals.some(v => v > 0)
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>🔥 Calories brûlées / semaine</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données…</Text>}
+      <BarChart
+        data={{ labels: weeks, datasets: [{ data: hasData ? vals : [0, 0, 0, 0, 0, 0] }] }}
+        width={CHART_W} height={120}
+        yAxisLabel="" yAxisSuffix=" kcal"
+        chartConfig={chartCfg('#EF4444', !hasData)}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        fromZero
+      />
+    </View>
+  )
+}
+
 // ── Body tab ──────────────────────────────────────────────────
 
 function BodyTab({ bodyLogs, activities, unit }: any) {
@@ -444,7 +519,265 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
           </>
         )}
       </View>
+
+      {/* BMI trend */}
+      <BmiTrendCard bodyLogs={bodyLogs} unit={unit} />
+
+      {/* Calories burned by sport — pie */}
+      <CaloriesBySportPie activities={activities} />
+
+      {/* Session frequency heatmap by day-of-week */}
+      <DayFrequencyCard activities={activities} />
+
+      {/* Calories burned from training per week */}
+      <TrainingCaloriesCard activities={activities} />
     </>
+  )
+}
+
+function BmiTrendCard({ bodyLogs, unit }: any) {
+  const bmiLogs = bodyLogs
+    .filter((l: any) => l.weight_kg && l.height_cm)
+    .slice(-10)
+    .map((l: any) => {
+      const hm = l.height_cm / 100
+      const bmi = parseFloat((l.weight_kg / (hm * hm)).toFixed(1))
+      const d = new Date(l.logged_date)
+      return { label: `${d.getDate()}/${d.getMonth() + 1}`, value: bmi }
+    })
+  const hasData = bmiLogs.length >= 2
+  const latest = hasData ? bmiLogs[bmiLogs.length - 1].value : null
+  const bmiLabel = latest
+    ? latest < 18.5 ? 'Insuffisance pondérale' : latest < 25 ? 'Normal' : latest < 30 ? 'Surpoids' : 'Obésité'
+    : null
+
+  return (
+    <View style={card.box}>
+      <View style={card.headerRow}>
+        <Text style={card.title}>📐 IMC (BMI)</Text>
+        {latest && <Text style={[card.badge, { color: latest >= 18.5 && latest < 25 ? Colors.success : Colors.warning }]}>
+          {latest} · {bmiLabel}
+        </Text>}
+      </View>
+      {!hasData && <Text style={card.emptyHint}>Renseigne taille + poids dans les logs corporels</Text>}
+      <LineChart
+        data={{
+          labels: hasData ? bmiLogs.map((p: any) => p.label) : ['—', '—', '—', '—', '—', '—'],
+          datasets: [{ data: hasData ? bmiLogs.map((p: any) => p.value) : [20, 20, 20, 20, 20, 20] }],
+        }}
+        width={CHART_W} height={110}
+        chartConfig={chartCfg('#06B6D4', !hasData)}
+        bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        yAxisSuffix="" segments={3} fromZero={false}
+      />
+    </View>
+  )
+}
+
+function CaloriesBySportPie({ activities }: any) {
+  const calBySport: Record<string, number> = {}
+  for (const a of activities) {
+    if ((a.calories_burned ?? 0) > 0) {
+      const s = a.sport_type as SportType
+      calBySport[s] = (calBySport[s] ?? 0) + (a.calories_burned ?? 0)
+    }
+  }
+  const entries = (Object.entries(calBySport) as [SportType, number][]).sort((a, b) => b[1] - a[1])
+  const hasData = entries.length > 0
+
+  const pieData = hasData
+    ? entries.map(([sport, cal]) => ({
+        name: SPORT_LABEL[sport],
+        count: Math.round(cal),
+        color: SportColors[sport] ?? '#888',
+        legendFontColor: Colors.textSecondary,
+        legendFontSize: 11,
+      }))
+    : [{ name: 'Aucun', count: 1, color: Colors.border, legendFontColor: Colors.textTertiary, legendFontSize: 11 }]
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>🥧 Calories par sport</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données calories…</Text>}
+      <PieChart
+        data={pieData}
+        width={CHART_W}
+        height={150}
+        chartConfig={chartCfg('#F97316')}
+        accessor="count"
+        backgroundColor="transparent"
+        paddingLeft="10"
+        style={{ opacity: hasData ? 1 : 0.3, marginLeft: -Spacing.sm }}
+      />
+    </View>
+  )
+}
+
+function DayFrequencyCard({ activities }: any) {
+  const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+  const counts = [0, 0, 0, 0, 0, 0, 0]
+  for (const a of activities) {
+    const d = new Date(a.created_at)
+    const dow = (d.getDay() + 6) % 7 // 0=Mon
+    counts[dow]++
+  }
+  const hasData = counts.some(c => c > 0)
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>📅 Fréquence par jour</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données…</Text>}
+      <BarChart
+        data={{ labels: DAY_LABELS, datasets: [{ data: hasData ? counts : [0, 0, 0, 0, 0, 0, 0] }] }}
+        width={CHART_W} height={120}
+        yAxisLabel="" yAxisSuffix=""
+        chartConfig={chartCfg('#8B5CF6', !hasData)}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        fromZero
+      />
+    </View>
+  )
+}
+
+function TrainingCaloriesCard({ activities }: any) {
+  const byWeek: Record<string, number> = {}
+  for (const a of activities) {
+    const d = new Date(a.created_at)
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const key = `${monday.getDate()}/${monday.getMonth() + 1}`
+    byWeek[key] = (byWeek[key] ?? 0) + (a.calories_burned ?? 0)
+  }
+  const now = new Date()
+  const weeks: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i * 7 - ((now.getDay() + 6) % 7))
+    weeks.push(`${d.getDate()}/${d.getMonth() + 1}`)
+  }
+  const vals = weeks.map(k => Math.round(byWeek[k] ?? 0))
+  const hasData = vals.some(v => v > 0)
+  const total = vals.reduce((s, v) => s + v, 0)
+
+  return (
+    <View style={card.box}>
+      <View style={card.headerRow}>
+        <Text style={card.title}>🔥 Calories à l'entraînement</Text>
+        {hasData && <Text style={[card.badge, { color: '#EF4444' }]}>{total.toLocaleString('fr-FR')} kcal</Text>}
+      </View>
+      {!hasData && <Text style={card.emptyHint}>Ajoute des séances pour voir les calories brûlées</Text>}
+      <BarChart
+        data={{ labels: weeks, datasets: [{ data: hasData ? vals : [0, 0, 0, 0, 0, 0] }] }}
+        width={CHART_W} height={120}
+        yAxisLabel="" yAxisSuffix=" kcal"
+        chartConfig={chartCfg('#EF4444', !hasData)}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        fromZero
+      />
+    </View>
+  )
+}
+
+function SportPieChart({ sportBreakdown, total }: { sportBreakdown: Record<string, number>; total: number }) {
+  const entries = (Object.entries(sportBreakdown) as [SportType, number][]).sort((a, b) => b[1] - a[1])
+  const hasData = entries.length > 0
+
+  const PIE_COLORS = ['#3B82F6', '#8B5CF6', '#06B6D4', '#F97316', '#10B981', '#EF4444', '#F59E0B', '#EC4899', '#6366F1', '#14B8A6', '#84CC16']
+  const pieData = hasData
+    ? entries.map(([sport, count], i) => ({
+        name: SPORT_LABEL[sport],
+        count,
+        color: SportColors[sport] ?? PIE_COLORS[i % PIE_COLORS.length],
+        legendFontColor: Colors.textSecondary,
+        legendFontSize: 11,
+      }))
+    : [{ name: 'Aucun', count: 1, color: Colors.border, legendFontColor: Colors.textTertiary, legendFontSize: 11 }]
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>🥧 Répartition des sports</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de séances enregistrées…</Text>}
+      <PieChart
+        data={pieData}
+        width={CHART_W}
+        height={150}
+        chartConfig={chartCfg(Colors.electric)}
+        accessor="count"
+        backgroundColor="transparent"
+        paddingLeft="10"
+        style={{ opacity: hasData ? 1 : 0.3, marginLeft: -Spacing.sm }}
+      />
+    </View>
+  )
+}
+
+function SportTimePieChart({ activities }: { activities: any[] }) {
+  const timeByScvort: Record<string, number> = {}
+  for (const a of activities) {
+    const s = a.sport_type as SportType
+    timeByScvort[s] = (timeByScvort[s] ?? 0) + a.duration_seconds
+  }
+  const entries = (Object.entries(timeByScvort) as [SportType, number][]).sort((a, b) => b[1] - a[1])
+  const hasData = entries.length > 0
+
+  const pieData = hasData
+    ? entries.map(([sport, secs]) => ({
+        name: SPORT_LABEL[sport],
+        count: Math.round(secs / 60),
+        color: SportColors[sport] ?? '#888',
+        legendFontColor: Colors.textSecondary,
+        legendFontSize: 11,
+      }))
+    : [{ name: 'Aucun', count: 1, color: Colors.border, legendFontColor: Colors.textTertiary, legendFontSize: 11 }]
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>⏱ Temps par sport (min)</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de séances enregistrées…</Text>}
+      <PieChart
+        data={pieData}
+        width={CHART_W}
+        height={150}
+        chartConfig={chartCfg('#8B5CF6')}
+        accessor="count"
+        backgroundColor="transparent"
+        paddingLeft="10"
+        style={{ opacity: hasData ? 1 : 0.3, marginLeft: -Spacing.sm }}
+      />
+    </View>
+  )
+}
+
+function SessionLengthChart({ activities }: { activities: any[] }) {
+  // Buckets: < 20 min, 20-45 min, 45-75 min, > 75 min
+  const buckets = [0, 0, 0, 0]
+  const labels = ['<20m', '20-45m', '45-75m', '>75m']
+  for (const a of activities) {
+    const min = a.duration_seconds / 60
+    if (min < 20) buckets[0]++
+    else if (min < 45) buckets[1]++
+    else if (min < 75) buckets[2]++
+    else buckets[3]++
+  }
+  const hasData = buckets.some(b => b > 0)
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>📏 Durée des séances</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données…</Text>}
+      <BarChart
+        data={{ labels, datasets: [{ data: hasData ? buckets : [0, 0, 0, 0] }] }}
+        width={CHART_W} height={130}
+        yAxisLabel="" yAxisSuffix=" séances"
+        chartConfig={chartCfg('#10B981', !hasData)}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
+        fromZero
+      />
+    </View>
   )
 }
 
@@ -571,6 +904,25 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 40 },
   swipeHint: { alignItems: 'center' },
   swipeHintText: { fontSize: 10, color: Colors.textTertiary, fontStyle: 'italic' },
+})
+
+const exerciseBtn = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.electric,
+    ...Shadow.sm,
+  },
+  emoji: { fontSize: 18 },
+  label: { flex: 1, fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  arrow: { fontSize: FontSize.md, color: Colors.electric },
 })
 
 const kpi = StyleSheet.create({

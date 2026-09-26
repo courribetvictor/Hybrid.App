@@ -15,6 +15,31 @@ export interface Follow {
   created_at: string
 }
 
+export interface Post {
+  id: string
+  user_id: string
+  content: string
+  sport_type: SportType | null
+  media_url: string | null
+  likes_count: number
+  created_at: string
+}
+
+export interface PostLike {
+  user_id: string
+  post_id: string
+  created_at: string
+}
+
+export interface PostWithProfile extends Post {
+  profiles: {
+    username: string
+    avatar_url: string | null
+    is_pro: boolean
+  } | null
+  liked_by_me: boolean
+}
+
 // ── Sport-specific JSONB metric shapes ──────────────────────
 
 export interface EnduranceMetrics {
@@ -239,12 +264,32 @@ export type Database = {
         Update: DbRow<Partial<Omit<WeeklyChallenge, 'id' | 'created_at'>>>
         Relationships: []
       }
+      posts: {
+        Row: DbRow<Post>
+        Insert: DbRow<Omit<Post, 'id' | 'likes_count' | 'created_at' | 'media_url'> & {
+          id?: string
+          likes_count?: number
+          media_url?: string | null
+          created_at?: string
+        }>
+        Update: DbRow<Partial<Pick<Post, 'content' | 'sport_type' | 'media_url'>>>
+        Relationships: []
+      }
+      post_likes: {
+        Row: DbRow<PostLike>
+        Insert: DbRow<Omit<PostLike, 'created_at'> & { created_at?: string }>
+        Update: DbRow<Record<string, never>>
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      toggle_post_like: {
+        Args: { p_post_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       preferred_unit: PreferredUnit

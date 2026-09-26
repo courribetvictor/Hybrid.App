@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { runOnJS } from 'react-native-reanimated'
+import { runOnJS, useSharedValue } from 'react-native-reanimated'
 import { LineChart, BarChart } from 'react-native-chart-kit'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { formatPace, formatDistance } from '@/lib/units'
@@ -40,21 +40,25 @@ interface SportStatsTabProps {
 export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
   const [activeSport, setActiveSport] = useState<SportType>('gym')
   const filterScrollRef = useRef<ScrollView>(null)
+  // SharedValue so worklet reads live index without stale closure
+  const sportIndexSV = useSharedValue(0)
 
   const switchSport = (sport: SportType) => {
-    setActiveSport(sport)
     const idx = SPORT_FILTERS.findIndex(f => f.key === sport)
+    sportIndexSV.value = idx
+    setActiveSport(sport)
     filterScrollRef.current?.scrollTo({ x: Math.max(0, idx * 100 - 50), animated: true })
   }
 
   const swipe = Gesture.Pan()
-    .minDistance(30)
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-20, 20])
     .onEnd(e => {
       'worklet'
-      const idx = SPORT_FILTERS.findIndex(f => f.key === activeSport)
-      if (e.velocityX < -200 && idx < SPORT_FILTERS.length - 1) {
+      const idx = sportIndexSV.value
+      if (e.velocityX < -150 && idx < SPORT_FILTERS.length - 1) {
         runOnJS(switchSport)(SPORT_FILTERS[idx + 1].key)
-      } else if (e.velocityX > 200 && idx > 0) {
+      } else if (e.velocityX > 150 && idx > 0) {
         runOnJS(switchSport)(SPORT_FILTERS[idx - 1].key)
       }
     })

@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { SportType } from '@/types/database'
 
-const KEY = 'hybrid_weekly_goal_v2'
+const KEY = 'hybrid_weekly_goal_v3'
+const KEY_V2 = 'hybrid_weekly_goal_v2'
 const KEY_LEGACY = 'hybrid_weekly_goal_sessions'
 
 export type GoalType = 'sessions' | 'minutes' | 'km'
-export interface GoalConfig { type: GoalType; value: number }
+export interface GoalConfig {
+  type: GoalType
+  value: number
+  sport?: SportType | 'all' // which sport this goal targets
+}
 
 export function useWeeklyGoal() {
   const [goal, setGoalState] = useState<GoalConfig | null>(null)
@@ -16,13 +22,25 @@ export function useWeeklyGoal() {
         try { setGoalState(JSON.parse(v)) } catch {}
         return
       }
-      AsyncStorage.getItem(KEY_LEGACY).then(old => {
-        if (old !== null) {
-          const migrated: GoalConfig = { type: 'sessions', value: parseInt(old) }
-          setGoalState(migrated)
-          AsyncStorage.setItem(KEY, JSON.stringify(migrated))
-          AsyncStorage.removeItem(KEY_LEGACY)
+      // Migrate from v2 (no sport field)
+      AsyncStorage.getItem(KEY_V2).then(v2 => {
+        if (v2 !== null) {
+          try {
+            const migrated: GoalConfig = { ...JSON.parse(v2), sport: 'all' }
+            setGoalState(migrated)
+            AsyncStorage.setItem(KEY, JSON.stringify(migrated))
+          } catch {}
+          return
         }
+        // Migrate from v1 (sessions count only)
+        AsyncStorage.getItem(KEY_LEGACY).then(old => {
+          if (old !== null) {
+            const migrated: GoalConfig = { type: 'sessions', value: parseInt(old), sport: 'all' }
+            setGoalState(migrated)
+            AsyncStorage.setItem(KEY, JSON.stringify(migrated))
+            AsyncStorage.removeItem(KEY_LEGACY)
+          }
+        })
       })
     })
   }, [])
@@ -35,6 +53,7 @@ export function useWeeklyGoal() {
   const clearGoal = useCallback(async () => {
     setGoalState(null)
     await AsyncStorage.removeItem(KEY)
+    await AsyncStorage.removeItem(KEY_V2)
     await AsyncStorage.removeItem(KEY_LEGACY)
   }, [])
 

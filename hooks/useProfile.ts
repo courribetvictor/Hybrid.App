@@ -17,7 +17,6 @@ export function useProfile(userId: string | undefined) {
       .eq('id', userId)
       .single()
     if (err?.code === 'PGRST116') {
-      // Profil manquant → le recrée via la fonction DB, puis re-fetch
       await (supabase as any).rpc('ensure_profile')
       const { data: recovered } = await supabase
         .from('profiles')
@@ -38,14 +37,21 @@ export function useProfile(userId: string | undefined) {
   const updateProfile = useCallback(
     async (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => {
       if (!userId) return
-      const { data, error: err } = await supabase
+      // Use simple update without select — then refetch for reliable state sync
+      const { error: err } = await supabase
         .from('profiles')
         .update(updates)
         .eq('id', userId)
-        .select()
-        .single()
       if (err) throw new Error(err.message)
-      setProfile(data)
+      // Optimistic update then refetch for consistency
+      setProfile(prev => prev ? { ...prev, ...updates } : prev)
+      // Async refetch (don't await — keeps the UI fast)
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+        .then(({ data }) => { if (data) setProfile(data) })
     },
     [userId],
   )
@@ -53,7 +59,6 @@ export function useProfile(userId: string | undefined) {
   return { profile, loading, error, refetch: fetch, updateProfile }
 }
 
-// Standalone auth session hook
 export function useSession() {
   const [userId, setUserId] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
