@@ -65,7 +65,7 @@ function computeStreak(activities: Activity[]): number {
 // ── Screen ────────────────────────────────────────────────────
 
 export default function FeedScreen() {
-  const { userId } = useSession()
+  const { userId, email } = useSession()
   const { profile } = useProfile(userId ?? undefined)
   const { friendIds } = useFriendships(userId ?? undefined)
   const { following } = useFollows(userId ?? undefined)
@@ -189,7 +189,7 @@ export default function FeedScreen() {
             >
               <Avatar
                 uri={profile?.avatar_url}
-                username={profile?.username ?? '?'}
+                username={profile?.username ?? email?.split('@')[0] ?? 'U'}
                 isPro={profile?.is_pro}
                 size={34}
               />

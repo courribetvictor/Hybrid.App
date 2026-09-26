@@ -63,18 +63,21 @@ export function useProfile(userId: string | undefined) {
 
 export function useSession() {
   const [userId, setUserId] = useState<string | null>(null)
-  const [ready, setReady] = useState(false)
+  const [email, setEmail]   = useState<string | null>(null)
+  const [ready, setReady]   = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUserId(data.session?.user.id ?? null)
+      setEmail(data.session?.user.email ?? null)
       setReady(true)
     })
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserId(session?.user.id ?? null)
+      setEmail(session?.user.email ?? null)
     })
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  return { userId, ready }
+  return { userId, email, ready }
 }
