@@ -1,10 +1,12 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withSequence,
+  withTiming,
+  withDelay,
 } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
 import { Avatar } from '@/components/ui/Avatar'
@@ -22,14 +24,47 @@ const SPORT_LABEL: Record<SportType, string> = {
   gym: 'Musculation', badminton: 'Badminton', athletics: 'Athlétisme',
   football: 'Football', tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
 }
+const SPORT_BANNER_EMOJI: Record<SportType, string> = {
+  running: '🏃‍♂️', cycling: '🚵', swimming: '🏊‍♀️',
+  gym: '💪', badminton: '🏸', athletics: '🎽',
+  football: '⚽', tennis: '🎾', hiking: '🏔️', yoga: '🕉️', boxing: '🥊',
+}
+const SPORT_BG_PATTERN: Record<SportType, string[]> = {
+  running:   ['F', 'P', 'C', 'S'],
+  cycling:   ['V', 'D', 'T', 'M'],
+  swimming:  ['∼', '≈', '∼', '≈'],
+  gym:       ['💪', '🔥', '⚡', '💥'],
+  badminton: ['→', '←', '↗', '↙'],
+  athletics: ['⚡', '🏅', '⚡', '🏅'],
+  football:  ['⚽', '🥅', '⚽', '🥅'],
+  tennis:    ['🎾', '⟳', '🎾', '⟳'],
+  hiking:    ['△', '◇', '△', '◇'],
+  yoga:      ['☯', '✿', '☯', '✿'],
+  boxing:    ['🥊', '💫', '🥊', '💫'],
+}
 
-export function ActivityCard({ activity, unit = 'metric' }: {
+export function ActivityCard({ activity, unit = 'metric', index = 0 }: {
   activity: ActivityWithProfile
   unit?: 'metric' | 'imperial'
+  index?: number
 }) {
   const [kudosed, setKudosed] = useState(false)
   const [kudosCount, setKudosCount] = useState(0)
   const scale = useSharedValue(1)
+
+  // Entrance animation
+  const opacity = useSharedValue(0)
+  const translateY = useSharedValue(24)
+
+  useEffect(() => {
+    opacity.value = withDelay(index * 60, withTiming(1, { duration: 280 }))
+    translateY.value = withDelay(index * 60, withSpring(0, { damping: 18, stiffness: 200 }))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const entranceStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }))
 
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
@@ -46,34 +81,53 @@ export function ActivityCard({ activity, unit = 'metric' }: {
 
   const accent = SportColors[activity.sport_type]
   const metrics = getMetrics(activity, unit)
+  const patterns = SPORT_BG_PATTERN[activity.sport_type]
 
   return (
-    <View style={styles.card}>
-      {/* Header */}
+    <Animated.View style={[styles.card, entranceStyle]}>
+      {/* Sport banner */}
+      <View style={[styles.banner, { backgroundColor: accent }]}>
+        {/* Pattern bg */}
+        <View style={styles.bannerPattern}>
+          {patterns.map((p, i) => (
+            <Text key={i} style={[styles.patternChar, { opacity: 0.15 + (i % 2) * 0.08 }]}>{p}</Text>
+          ))}
+        </View>
+        {/* Content */}
+        <View style={styles.bannerContent}>
+          <Text style={styles.bannerEmoji}>{SPORT_BANNER_EMOJI[activity.sport_type]}</Text>
+          <View style={styles.bannerText}>
+            <Text style={styles.bannerSport}>{SPORT_LABEL[activity.sport_type]}</Text>
+            <Text style={styles.bannerDuration}>{formatDurationLong(activity.duration_seconds)}</Text>
+          </View>
+        </View>
+        {/* Calories badge */}
+        {activity.calories_burned ? (
+          <View style={styles.calBadge}>
+            <Text style={styles.calBadgeText}>🔥 {activity.calories_burned} kcal</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* User row */}
       <View style={styles.header}>
-        <Avatar uri={activity.profile.avatar_url} username={activity.profile.username} isPro={activity.profile.is_pro} size={40} />
+        <Avatar
+          uri={activity.profile.avatar_url}
+          username={activity.profile.username}
+          isPro={activity.profile.is_pro}
+          size={36}
+        />
         <View style={styles.headerText}>
           <Text style={styles.username}>{activity.profile.username}</Text>
           <Text style={styles.meta}>{timeAgo(activity.created_at)}</Text>
         </View>
       </View>
 
-      {/* Sport tag + title */}
-      <View style={styles.sportRow}>
-        <View style={[styles.sportTag, { backgroundColor: accent + '18' }]}>
-          <Text style={styles.sportEmoji}>{SPORT_EMOJI[activity.sport_type]}</Text>
-          <Text style={[styles.sportLabel, { color: accent }]}>{SPORT_LABEL[activity.sport_type]}</Text>
-        </View>
-      </View>
-
-      {/* Primary stat — duration big */}
-      <Text style={styles.duration}>{formatDurationLong(activity.duration_seconds)}</Text>
-
-      {/* Metric grid — Strava style */}
+      {/* Metric grid */}
       {metrics.length > 0 && (
         <View style={styles.metricGrid}>
           {metrics.map((m, i) => (
-            <View key={i} style={styles.metricCell}>
+            <View key={i} style={[styles.metricCell, { borderLeftColor: accent + '50', borderLeftWidth: i === 0 ? 0 : 1 }]}>
               <Text style={styles.metricValue}>{m.value}</Text>
               <Text style={styles.metricLabel}>{m.label}</Text>
             </View>
@@ -84,7 +138,7 @@ export function ActivityCard({ activity, unit = 'metric' }: {
       {/* Divider */}
       <View style={styles.divider} />
 
-      {/* Footer: kudos */}
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity onPress={handleKudos} activeOpacity={0.75} style={styles.kudosWrap}>
           <Animated.Text style={[styles.kudosEmoji, animStyle]}>
@@ -95,16 +149,9 @@ export function ActivityCard({ activity, unit = 'metric' }: {
           </Text>
         </TouchableOpacity>
 
-        {activity.calories_burned ? (
-          <View style={styles.calRow}>
-            <Text style={styles.calText}>{activity.calories_burned} kcal</Text>
-          </View>
-        ) : null}
+        <View style={[styles.sportDot, { backgroundColor: accent }]} />
       </View>
-
-      {/* Accent left border */}
-      <View style={[styles.border, { backgroundColor: accent }]} />
-    </View>
+    </Animated.View>
   )
 }
 
@@ -198,55 +245,97 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    paddingLeft: Spacing.md + 4,
     overflow: 'hidden',
     ...Shadow.sm,
-    gap: 10,
   },
-  border: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  banner: {
+    height: 88,
+    overflow: 'hidden',
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  bannerPattern: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
+    padding: 8,
+  },
+  patternChar: {
+    fontSize: 28,
+    color: '#fff',
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  bannerEmoji: {
+    fontSize: 36,
+  },
+  bannerText: { flex: 1, gap: 2 },
+  bannerSport: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.extrabold,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  bannerDuration: {
+    fontSize: FontSize['2xl'],
+    fontWeight: FontWeight.extrabold,
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  calBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  calBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: '#fff' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+  },
   headerText: { flex: 1 },
   username: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   meta: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 1 },
-  sportRow: { flexDirection: 'row' },
-  sportTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-  },
-  sportEmoji: { fontSize: 13 },
-  sportLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold },
-  duration: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
   metricGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 0,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    paddingTop: 10,
+    marginTop: Spacing.sm,
+    marginHorizontal: Spacing.md,
   },
   metricCell: {
-    width: '25%',
-    paddingRight: 8,
-    marginBottom: 4,
+    flex: 1,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: 6,
+    alignItems: 'center',
   },
   metricValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   metricLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 1 },
-  divider: { height: 1, backgroundColor: Colors.borderLight },
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  divider: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.md },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
   kudosWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   kudosEmoji: { fontSize: 20 },
   kudosText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
   kudosActive: { color: Colors.electric },
-  calRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  calText: { fontSize: FontSize.sm, color: Colors.textTertiary },
+  sportDot: { width: 8, height: 8, borderRadius: 4 },
 })

@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as ImagePicker from 'expo-image-picker'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -197,6 +198,45 @@ export default function ProfileScreen() {
   const [notifVisible, setNotifVisible] = useState(false)
   const [privacyVisible, setPrivacyVisible] = useState(false)
   const [goalVisible, setGoalVisible] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+
+  const handleAvatarPress = useCallback(async () => {
+    if (!userId) return
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) return
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    })
+    if (result.canceled || !result.assets[0] || !result.assets[0].base64) return
+    const asset = result.assets[0]
+    const ext = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const path = `${userId}/avatar.${ext}`
+    setAvatarUploading(true)
+    try {
+      const b64 = asset.base64!
+      const byteCharacters = atob(b64)
+      const byteNumbers = new Uint8Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, byteNumbers, { contentType: `image/${ext}`, upsert: true })
+      if (upErr) throw upErr
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      await updateProfile({ avatar_url: publicUrl + `?t=${Date.now()}` })
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    } catch (e) {
+      console.warn('Avatar upload failed:', e)
+    } finally {
+      setAvatarUploading(false)
+    }
+  }, [userId, updateProfile])
 
   const unit = profile?.preferred_unit ?? 'metric'
   const lang = profile?.preferred_language ?? 'fr'
@@ -278,12 +318,20 @@ export default function ProfileScreen() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <Avatar
-            uri={profile?.avatar_url}
-            username={profile?.username ?? '?'}
-            isPro={profile?.is_pro}
-            size={72}
-          />
+          <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85} style={styles.avatarWrap}>
+            <Avatar
+              uri={profile?.avatar_url}
+              username={profile?.username ?? '?'}
+              isPro={profile?.is_pro}
+              size={80}
+            />
+            <View style={styles.avatarEdit}>
+              {avatarUploading
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={styles.avatarEditIcon}>📷</Text>
+              }
+            </View>
+          </TouchableOpacity>
           <View style={styles.heroTop}>
             <Text style={styles.name}>{profile?.username ?? '—'}</Text>
             {fitnessLevel && (
@@ -1024,6 +1072,21 @@ const styles = StyleSheet.create({
     gap: 6,
     ...Shadow.sm,
   },
+  avatarWrap: { position: 'relative' },
+  avatarEdit: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.electric,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.bgCard,
+  },
+  avatarEditIcon: { fontSize: 11 },
   heroTop: { alignItems: 'center', gap: 4 },
   name: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, letterSpacing: -0.3 },
   bio: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: Spacing.lg, lineHeight: 18 },

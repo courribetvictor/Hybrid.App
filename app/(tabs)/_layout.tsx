@@ -7,7 +7,7 @@ import { Colors, FontSize, FontWeight, Radius } from '@/constants/theme'
 const TABS = [
   { name: 'index',   label: 'Feed',    icon: '⚡' },
   { name: 'arena',   label: 'Arène',   icon: '🏆' },
-  { name: 'stats',   label: 'Stats',   icon: '📊' },
+  { name: 'stats',   label: 'Labo',    icon: '🔬' },
   { name: 'profile', label: 'Profil',  icon: '👤' },
 ]
 

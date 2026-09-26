@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { runOnJS } from 'react-native-reanimated'
 import { LineChart, BarChart } from 'react-native-chart-kit'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { formatPace, formatDistance } from '@/lib/units'
@@ -37,6 +39,25 @@ interface SportStatsTabProps {
 
 export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
   const [activeSport, setActiveSport] = useState<SportType>('gym')
+  const filterScrollRef = useRef<ScrollView>(null)
+
+  const switchSport = (sport: SportType) => {
+    setActiveSport(sport)
+    const idx = SPORT_FILTERS.findIndex(f => f.key === sport)
+    filterScrollRef.current?.scrollTo({ x: Math.max(0, idx * 100 - 50), animated: true })
+  }
+
+  const swipe = Gesture.Pan()
+    .minDistance(30)
+    .onEnd(e => {
+      'worklet'
+      const idx = SPORT_FILTERS.findIndex(f => f.key === activeSport)
+      if (e.velocityX < -200 && idx < SPORT_FILTERS.length - 1) {
+        runOnJS(switchSport)(SPORT_FILTERS[idx + 1].key)
+      } else if (e.velocityX > 200 && idx > 0) {
+        runOnJS(switchSport)(SPORT_FILTERS[idx - 1].key)
+      }
+    })
 
   const filtered = useMemo(
     () => activities.filter(a => a.sport_type === activeSport).slice().reverse(),
@@ -52,11 +73,12 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
   }, [activities])
 
   return (
+    <GestureDetector gesture={swipe}>
     <View style={styles.content}>
       {/* Sport filter pills */}
       <View style={styles.filterSection}>
-        <Text style={styles.filterHint}>Sélectionne un sport ↓</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+        <Text style={styles.filterHint}>← Glisse pour changer de sport →</Text>
+        <ScrollView ref={filterScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {SPORT_FILTERS.map(s => (
           <TouchableOpacity
             key={s.key}
@@ -64,7 +86,7 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
               styles.filterChip,
               activeSport === s.key && { backgroundColor: SportColors[s.key], borderColor: SportColors[s.key] },
             ]}
-            onPress={() => setActiveSport(s.key)}
+            onPress={() => switchSport(s.key)}
             activeOpacity={0.75}
           >
             <Text style={styles.filterEmoji}>{s.emoji}</Text>
@@ -84,22 +106,57 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
       </View>
 
       {filtered.length === 0 ? (
-        <EmptyState sport={activeSport} sportCounts={sportCounts} onSelect={setActiveSport} />
-      ) : (
-        <>
-          {activeSport === 'gym' && <GymStats activities={filtered} unit={unit} />}
-          {(activeSport === 'running' || activeSport === 'cycling' || activeSport === 'swimming') && (
-            <EnduranceStats activities={filtered} unit={unit} sport={activeSport} />
-          )}
-          {activeSport === 'hiking' && <HikingStats activities={filtered} unit={unit} />}
-          {activeSport === 'badminton' && <BadmintonStats activities={filtered} />}
-          {activeSport === 'tennis' && <TennisStats activities={filtered} />}
-          {activeSport === 'football' && <FootballStats activities={filtered} />}
-          {activeSport === 'boxing' && <BoxingStats activities={filtered} />}
-          {activeSport === 'yoga' && <YogaStats activities={filtered} />}
-          {activeSport === 'athletics' && <AthleticsStats activities={filtered} />}
-        </>
+        <EmptyState sport={activeSport} sportCounts={sportCounts} onSelect={switchSport} />
+      ) : null}
+
+      {/* Always render stats (show empty state inside each component) */}
+      {activeSport === 'gym' && <GymStats activities={filtered} unit={unit} />}
+      {(activeSport === 'running' || activeSport === 'cycling' || activeSport === 'swimming') && (
+        <EnduranceStats activities={filtered} unit={unit} sport={activeSport} />
       )}
+      {activeSport === 'hiking' && <HikingStats activities={filtered} unit={unit} />}
+      {activeSport === 'badminton' && <BadmintonStats activities={filtered} />}
+      {activeSport === 'tennis' && <TennisStats activities={filtered} />}
+      {activeSport === 'football' && <FootballStats activities={filtered} />}
+      {activeSport === 'boxing' && <BoxingStats activities={filtered} />}
+      {activeSport === 'yoga' && <YogaStats activities={filtered} />}
+      {activeSport === 'athletics' && <AthleticsStats activities={filtered} />}
+    </View>
+    </GestureDetector>
+  )
+}
+
+// ── Empty chart placeholder ───────────────────────────────────
+
+const EMPTY_LABELS = ['—', '—', '—', '—', '—', '—']
+const EMPTY_VALS = [0, 0, 0, 0, 0, 0]
+
+function EmptyChartCard({ title, hint, bar = true }: { title: string; hint: string; bar?: boolean }) {
+  const cfg = makeChartConfig('#94A3B8')
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      <Text style={[styles.cardSub, { fontStyle: 'italic' }]}>{hint}</Text>
+      <View style={{ opacity: 0.22 }}>
+        {bar ? (
+          <BarChart
+            data={{ labels: EMPTY_LABELS, datasets: [{ data: EMPTY_VALS }] }}
+            width={CHART_W - Spacing.md * 2} height={100}
+            yAxisLabel="" yAxisSuffix=""
+            chartConfig={cfg}
+            withInnerLines={false} showBarTops={false}
+            style={styles.chart} fromZero
+          />
+        ) : (
+          <LineChart
+            data={{ labels: EMPTY_LABELS, datasets: [{ data: [60, 60, 60, 60, 60, 60] }] }}
+            width={CHART_W - Spacing.md * 2} height={100}
+            chartConfig={cfg}
+            bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
+            style={styles.chart} yAxisSuffix="" segments={2}
+          />
+        )}
+      </View>
     </View>
   )
 }
@@ -107,7 +164,15 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
 // ── Gym stats : historique 1RM par exercice ───────────────────
 
 function GymStats({ activities, unit }: { activities: Activity[]; unit: PreferredUnit }) {
-  // Collect all unique exercise names
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="🏋️ Historique 1RM" hint="Tes records de force apparaîtront ici" bar={false} />
+        <EmptyChartCard title="💪 Volume par séance" hint="Le volume total soulevé par séance" bar />
+      </>
+    )
+  }
+
   const exerciseNames = useMemo(() => {
     const names = new Set<string>()
     for (const a of activities) {
@@ -238,6 +303,16 @@ function EnduranceStats({
   unit: PreferredUnit
   sport: SportType
 }) {
+  if (activities.length === 0) {
+    const distLabel = unit === 'imperial' ? 'mi' : 'km'
+    return (
+      <>
+        <EmptyChartCard title="📍 Historique des allures" hint="Tes allures moyennes par séance" bar={false} />
+        <EmptyChartCard title={`📏 Distance par séance (${distLabel})`} hint="La distance couverte à chaque sortie" bar />
+      </>
+    )
+  }
+
   const accentColor = SportColors[sport]
 
   const paceHistory = useMemo(() =>
@@ -338,6 +413,14 @@ function EnduranceStats({
 // ── Badminton stats : ratio V/D ───────────────────────────────
 
 function BadmintonStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="🏸 Bilan matchs" hint="Victoires, défaites et win rate" bar />
+        <EmptyChartCard title="🏸 Résultats récents" hint="Tes derniers matchs joués" bar />
+      </>
+    )
+  }
   const stats = useMemo(() => {
     let wins = 0, losses = 0
     const setScores: { player: number; opponent: number }[] = []
@@ -405,6 +488,11 @@ function BadmintonStats({ activities }: { activities: Activity[] }) {
 // ── Athletics stats ───────────────────────────────────────────
 
 function AthleticsStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <EmptyChartCard title="⚡ Performances par épreuve" hint="100m, saut en longueur, lancé… tes meilleures perfs" bar />
+    )
+  }
   const events = useMemo(() => {
     const map: Record<string, number[]> = {}
     for (const a of activities) {
@@ -438,6 +526,14 @@ function AthleticsStats({ activities }: { activities: Activity[] }) {
 // ── Hiking stats : distance + dénivelé ───────────────────────
 
 function HikingStats({ activities, unit }: { activities: Activity[]; unit: PreferredUnit }) {
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="🥾 Résumé randonnées" hint="Distance et dénivelé cumulés" bar />
+        <EmptyChartCard title="🥾 Dénivelé par sortie (m)" hint="L'élévation de chaque randonnée" bar />
+      </>
+    )
+  }
   const distLabel = unit === 'imperial' ? 'mi' : 'km'
 
   const data = useMemo(() =>
@@ -495,6 +591,14 @@ function HikingStats({ activities, unit }: { activities: Activity[]; unit: Prefe
 // ── Football stats ────────────────────────────────────────────
 
 function FootballStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="⚽ Bilan matchs" hint="Résultats, buts et passes décisives" bar />
+        <EmptyChartCard title="⚽ Buts par match" hint="Tes réalisations match par match" bar />
+      </>
+    )
+  }
   const stats = useMemo(() => {
     let wins = 0, losses = 0, totalGoals = 0, totalAssists = 0
     for (const a of activities) {
@@ -573,6 +677,14 @@ function FootballStats({ activities }: { activities: Activity[] }) {
 // ── Tennis stats ──────────────────────────────────────────────
 
 function TennisStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="🎾 Bilan matchs" hint="Victoires, défaites et aces" bar />
+        <EmptyChartCard title="🎾 Résultats récents" hint="L'historique de tes matchs" bar />
+      </>
+    )
+  }
   const stats = useMemo(() => {
     let wins = 0, losses = 0, totalAces = 0
     for (const a of activities) {
@@ -628,6 +740,11 @@ function TennisStats({ activities }: { activities: Activity[] }) {
 // ── Yoga stats ────────────────────────────────────────────────
 
 function YogaStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <EmptyChartCard title="🧘 Répartition par style" hint="Hatha, Vinyasa, Yin… tes pratiques" bar />
+    )
+  }
   const stats = useMemo(() => {
     const styleCount: Record<string, number> = {}
     let totalMinutes = 0
@@ -677,6 +794,14 @@ function YogaStats({ activities }: { activities: Activity[] }) {
 // ── Boxing stats ──────────────────────────────────────────────
 
 function BoxingStats({ activities }: { activities: Activity[] }) {
+  if (activities.length === 0) {
+    return (
+      <>
+        <EmptyChartCard title="🥊 Résumé rounds" hint="Total de rounds et types de séances" bar />
+        <EmptyChartCard title="🥊 Rounds par séance" hint="L'évolution de tes séances" bar />
+      </>
+    )
+  }
   const stats = useMemo(() => {
     const typeCount: Record<string, number> = {}
     let totalRounds = 0

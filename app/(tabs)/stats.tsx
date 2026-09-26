@@ -1,5 +1,13 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useCallback } from 'react'
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated'
 import { LineChart, BarChart } from 'react-native-chart-kit'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { HeatmapView } from '@/components/lab/HeatmapView'
@@ -17,9 +25,17 @@ const CHART_W = W - Spacing.md * 2 - Spacing.md * 2
 type Tab = 'overview' | 'body' | 'sport'
 type Period = 7 | 30 | 90 | 365
 
+const TABS: { key: Tab; label: string; emoji: string }[] = [
+  { key: 'overview', label: 'Aperçu',  emoji: '📊' },
+  { key: 'body',     label: 'Corps',   emoji: '⚖️' },
+  { key: 'sport',    label: 'Sport',   emoji: '🎯' },
+]
+
 const PERIODS: { v: Period; l: string }[] = [
   { v: 7, l: '7J' }, { v: 30, l: '30J' }, { v: 90, l: '90J' }, { v: 365, l: '1A' },
 ]
+
+const TAB_KEYS: Tab[] = ['overview', 'body', 'sport']
 
 export default function StatsScreen() {
   const { userId } = useSession()
@@ -27,20 +43,65 @@ export default function StatsScreen() {
   const [tab, setTab] = useState<Tab>('overview')
   const [period, setPeriod] = useState<Period>(30)
 
+  const tabIndex = TAB_KEYS.indexOf(tab)
+  const indicatorX = useSharedValue(0)
+  const tabBarWidth = useRef(W - Spacing.md * 2 - 6)
+
   const unit = profile?.preferred_unit ?? 'metric'
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, period)
   const { activities, heatmapData, sportBreakdown, totalCalories, totalDurationSeconds } =
     useActivities(userId ?? undefined, period)
 
+  const switchTab = useCallback((newTab: Tab) => {
+    setTab(newTab)
+    const idx = TAB_KEYS.indexOf(newTab)
+    const chipW = tabBarWidth.current / 3
+    indicatorX.value = withSpring(idx * chipW, { damping: 18, stiffness: 200 })
+  }, [indicatorX])
+
+  const swipe = Gesture.Pan()
+    .minDistance(20)
+    .onEnd(e => {
+      'worklet'
+      const idx = TAB_KEYS.indexOf(tab)
+      if (e.velocityX < -200 && idx < 2) {
+        runOnJS(switchTab)(TAB_KEYS[idx + 1])
+      } else if (e.velocityX > 200 && idx > 0) {
+        runOnJS(switchTab)(TAB_KEYS[idx - 1])
+      }
+    })
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }],
+  }))
+
+  // initialise indicator position when first render
+  React.useEffect(() => {
+    const chipW = tabBarWidth.current / 3
+    indicatorX.value = tabIndex * chipW
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Statistiques" />
+      <ScreenHeader title="🔬 Labo" />
 
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        {([['overview', '📊 Aperçu'], ['body', '⚖️ Corps'], ['sport', '🎯 Sport']] as [Tab, string][]).map(([key, label]) => (
-          <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.tabActive]} onPress={() => setTab(key)}>
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+      {/* Tab bar with sliding indicator */}
+      <View
+        style={styles.tabBar}
+        onLayout={e => {
+          tabBarWidth.current = e.nativeEvent.layout.width - 6
+        }}
+      >
+        <Animated.View style={[styles.tabIndicator, indicatorStyle, { width: `${100 / 3}%` as any }]} />
+        {TABS.map(t => (
+          <TouchableOpacity
+            key={t.key}
+            style={styles.tab}
+            onPress={() => switchTab(t.key)}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.tabEmoji}>{t.emoji}</Text>
+            <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -58,23 +119,30 @@ export default function StatsScreen() {
         ))}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-        {tab === 'overview' && (
-          <OverviewTab
-            activities={activities}
-            heatmapData={heatmapData}
-            sportBreakdown={sportBreakdown}
-            totalCalories={totalCalories}
-            totalDurationSeconds={totalDurationSeconds}
-          />
-        )}
-        {tab === 'body' && (
-          <BodyTab bodyLogs={bodyLogs} activities={activities} unit={unit} />
-        )}
-        {tab === 'sport' && (
-          <SportStatsTab activities={activities} unit={unit} />
-        )}
-      </ScrollView>
+      {/* Swipeable content */}
+      <GestureDetector gesture={swipe}>
+        <ScrollView
+          key={tab}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          {tab === 'overview' && (
+            <OverviewTab
+              activities={activities}
+              heatmapData={heatmapData}
+              sportBreakdown={sportBreakdown}
+              totalCalories={totalCalories}
+              totalDurationSeconds={totalDurationSeconds}
+            />
+          )}
+          {tab === 'body' && (
+            <BodyTab bodyLogs={bodyLogs} activities={activities} unit={unit} />
+          )}
+          {tab === 'sport' && (
+            <SportStatsTab activities={activities} unit={unit} />
+          )}
+        </ScrollView>
+      </GestureDetector>
     </View>
   )
 }
@@ -88,22 +156,27 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
     <>
       {/* KPI row */}
       <View style={kpi.row}>
-        <KpiCard icon="🏅" label="Séances" value={String(total)} />
-        <KpiCard icon="⏱" label="Durée totale" value={formatDurationLong(totalDurationSeconds)} />
-        <KpiCard icon="🔥" label="kcal brûlées" value={totalCalories > 0 ? `${Math.round(totalCalories / 1000 * 10) / 10}k` : '—'} />
+        <KpiCard icon="🏅" label="Séances"      value={String(total)} accent={Colors.electric} />
+        <KpiCard icon="⏱"  label="Durée totale" value={formatDurationLong(totalDurationSeconds)} accent="#8B5CF6" />
+        <KpiCard icon="🔥" label="kcal"          value={totalCalories > 0 ? `${(totalCalories / 1000).toFixed(1)}k` : '—'} accent="#F97316" />
+      </View>
+
+      {/* Swipe hint */}
+      <View style={styles.swipeHint}>
+        <Text style={styles.swipeHintText}>← Glisse pour changer d'onglet →</Text>
       </View>
 
       {/* Heatmap */}
       <HeatmapView data={heatmapData} weeks={14} />
 
       {/* Sport breakdown */}
-      {Object.keys(sportBreakdown).length > 0 && (
-        <View style={card.box}>
-          <Text style={card.title}>Répartition des sports</Text>
-          {(Object.entries(sportBreakdown) as [SportType, number][])
+      <View style={card.box}>
+        <Text style={card.title}>Répartition des sports</Text>
+        {Object.keys(sportBreakdown).length > 0 ? (
+          (Object.entries(sportBreakdown) as [SportType, number][])
             .sort((a, b) => b[1] - a[1])
             .map(([sport, count]) => {
-              const pct = Math.round((count / total) * 100)
+              const pct = total > 0 ? Math.round((count / total) * 100) : 0
               return (
                 <View key={sport} style={breakdown.row}>
                   <Text style={breakdown.name}>{SPORT_LABEL[sport]}</Text>
@@ -113,18 +186,20 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
                   <Text style={breakdown.pct}>{pct}%</Text>
                 </View>
               )
-            })}
-        </View>
-      )}
+            })
+        ) : (
+          <EmptyBarChart label="Aucune séance encore enregistrée" />
+        )}
+      </View>
 
-      {/* Weekly volume chart */}
-      {total > 0 && <WeeklyVolumeChart activities={activities} />}
+      {/* Weekly sessions chart - always shown */}
+      <WeeklyVolumeChart activities={activities} />
 
-      {/* Weekly duration chart */}
-      {total > 0 && <WeeklyDurationChart activities={activities} />}
+      {/* Weekly duration chart - always shown */}
+      <WeeklyDurationChart activities={activities} />
 
       {/* Personal records */}
-      {total > 0 && <PersonalRecords activities={activities} />}
+      <PersonalRecords activities={activities} />
     </>
   )
 }
@@ -138,21 +213,29 @@ function WeeklyVolumeChart({ activities }: any) {
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`
     byWeek[key] = (byWeek[key] ?? 0) + 1
   }
-  const keys = Object.keys(byWeek).slice(-6)
-  const vals = keys.map(k => byWeek[k])
-  if (keys.length < 2) return null
+
+  const now = new Date()
+  const weeks: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i * 7 - ((now.getDay() + 6) % 7))
+    weeks.push(`${d.getDate()}/${d.getMonth() + 1}`)
+  }
+  const vals = weeks.map(k => byWeek[k] ?? 0)
+  const hasData = vals.some(v => v > 0)
 
   return (
     <View style={card.box}>
       <Text style={card.title}>Séances par semaine</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données…</Text>}
       <BarChart
-        data={{ labels: keys, datasets: [{ data: vals }] }}
+        data={{ labels: weeks, datasets: [{ data: hasData ? vals : [0, 0, 0, 0, 0, 0] }] }}
         width={CHART_W}
         height={120}
         yAxisLabel="" yAxisSuffix=""
-        chartConfig={chartCfg()}
+        chartConfig={chartCfg(Colors.electric, !hasData)}
         withInnerLines={false} showBarTops={false}
-        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
         fromZero
       />
     </View>
@@ -168,21 +251,29 @@ function WeeklyDurationChart({ activities }: any) {
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`
     byWeek[key] = (byWeek[key] ?? 0) + Math.round(a.duration_seconds / 60)
   }
-  const keys = Object.keys(byWeek).slice(-6)
-  const vals = keys.map(k => byWeek[k])
-  if (keys.length < 2) return null
+
+  const now = new Date()
+  const weeks: string[] = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i * 7 - ((now.getDay() + 6) % 7))
+    weeks.push(`${d.getDate()}/${d.getMonth() + 1}`)
+  }
+  const vals = weeks.map(k => byWeek[k] ?? 0)
+  const hasData = vals.some(v => v > 0)
 
   return (
     <View style={card.box}>
       <Text style={card.title}>Durée par semaine (min)</Text>
+      {!hasData && <Text style={card.emptyHint}>En attente de données…</Text>}
       <BarChart
-        data={{ labels: keys, datasets: [{ data: vals }] }}
+        data={{ labels: weeks, datasets: [{ data: hasData ? vals : [0, 0, 0, 0, 0, 0] }] }}
         width={CHART_W}
         height={120}
         yAxisLabel="" yAxisSuffix=" min"
-        chartConfig={{ ...chartCfg(), color: (o = 1) => `rgba(139,92,246,${o})` }}
+        chartConfig={chartCfg('#8B5CF6', !hasData)}
         withInnerLines={false} showBarTops={false}
-        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: hasData ? 1 : 0.3 }}
         fromZero
       />
     </View>
@@ -190,47 +281,42 @@ function WeeklyDurationChart({ activities }: any) {
 }
 
 function PersonalRecords({ activities }: any) {
-  const records: { label: string; value: string; emoji: string }[] = []
+  const records: { label: string; value: string; emoji: string; color: string }[] = []
 
   const longestSession = activities.reduce((best: any, a: any) =>
     a.duration_seconds > (best?.duration_seconds ?? 0) ? a : best, null)
-  if (longestSession) {
-    records.push({
-      emoji: '⏱',
-      label: 'Séance la + longue',
-      value: formatDurationLong(longestSession.duration_seconds),
-    })
-  }
+  records.push({
+    emoji: '⏱', label: 'Séance la + longue', color: '#8B5CF6',
+    value: longestSession ? formatDurationLong(longestSession.duration_seconds) : '—',
+  })
 
-  const bestDistance = activities
+  const bestDistAct = activities
     .map((a: any) => ({ a, dist: (a.metrics?.distance_m ?? 0) }))
     .sort((x: any, y: any) => y.dist - x.dist)[0]
-  if (bestDistance?.dist > 0) {
-    records.push({
-      emoji: '📍',
-      label: 'Meilleure distance',
-      value: `${(bestDistance.dist / 1000).toFixed(1)} km`,
-    })
-  }
+  records.push({
+    emoji: '📍', label: 'Meilleure distance', color: Colors.electric,
+    value: bestDistAct?.dist > 0 ? `${(bestDistAct.dist / 1000).toFixed(1)} km` : '—',
+  })
 
   const sportSet = new Set(activities.map((a: any) => a.sport_type))
-  records.push({ emoji: '🎯', label: 'Sports pratiqués', value: String(sportSet.size) })
+  records.push({ emoji: '🎯', label: 'Sports pratiqués', color: '#F97316', value: String(sportSet.size) || '0' })
 
   const totalCal = activities.reduce((s: number, a: any) => s + (a.calories_burned ?? 0), 0)
-  if (totalCal > 0) {
-    records.push({ emoji: '🔥', label: 'Total calories', value: `${Math.round(totalCal).toLocaleString('fr-FR')} kcal` })
-  }
-
-  if (records.length === 0) return null
+  records.push({
+    emoji: '🔥', label: 'Total calories', color: '#EF4444',
+    value: totalCal > 0 ? `${Math.round(totalCal).toLocaleString('fr-FR')} kcal` : '—',
+  })
 
   return (
     <View style={card.box}>
-      <Text style={card.title}>Records personnels</Text>
+      <Text style={card.title}>Records & totaux</Text>
       <View style={prStyles.grid}>
         {records.map((r, i) => (
-          <View key={i} style={prStyles.item}>
+          <View key={i} style={[prStyles.item, { borderLeftColor: r.color + '60', borderLeftWidth: 3 }]}>
             <Text style={prStyles.emoji}>{r.emoji}</Text>
-            <Text style={prStyles.value}>{r.value}</Text>
+            <Text style={[prStyles.value, { color: r.value === '—' ? Colors.textTertiary : r.color }]}>
+              {r.value}
+            </Text>
             <Text style={prStyles.label}>{r.label}</Text>
           </View>
         ))}
@@ -243,7 +329,6 @@ function PersonalRecords({ activities }: any) {
 
 function BodyTab({ bodyLogs, activities, unit }: any) {
   const weightLogs = bodyLogs.filter((l: any) => l.weight_kg !== null).slice(-12)
-
   const weightValues = weightLogs.map((l: any) => displayWeight(l.weight_kg, unit).value)
   const weightLabels = weightLogs.map((l: any) => {
     const d = new Date(l.logged_date)
@@ -265,20 +350,25 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
 
   const wLabel = unit === 'imperial' ? 'lbs' : 'kg'
   const deltaWeight = weightValues.length >= 2 ? weightValues[weightValues.length - 1] - weightValues[0] : null
+  const hasWeightData = weightValues.length >= 2
+  const hasCalData = calDays.length >= 2
+
+  const emptyLabels = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6']
+  const emptyVals = [0, 0, 0, 0, 0, 0]
 
   return (
     <>
       {/* Weight card */}
       <View style={card.box}>
         <View style={card.headerRow}>
-          <Text style={card.title}>Poids</Text>
+          <Text style={card.title}>⚖️ Poids ({wLabel})</Text>
           {deltaWeight !== null && (
             <Text style={[card.badge, { color: deltaWeight <= 0 ? Colors.success : Colors.error }]}>
               {deltaWeight > 0 ? '+' : ''}{deltaWeight.toFixed(1)} {wLabel}
             </Text>
           )}
         </View>
-        {weightValues.length >= 2 ? (
+        {hasWeightData ? (
           <>
             <Text style={card.bigNum}>
               {weightValues[weightValues.length - 1].toFixed(1)}
@@ -288,7 +378,7 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
               data={{ labels: weightLabels, datasets: [{ data: weightValues }] }}
               width={CHART_W}
               height={130}
-              chartConfig={chartCfg()}
+              chartConfig={chartCfg('#06B6D4')}
               bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
               style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
               yAxisSuffix={` ${wLabel}`}
@@ -297,37 +387,77 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
             />
           </>
         ) : (
-          <Text style={card.empty}>Pas assez de données de poids</Text>
+          <>
+            <Text style={card.emptyHint}>Ajoute des logs corporels pour voir ton évolution</Text>
+            <LineChart
+              data={{ labels: emptyLabels, datasets: [{ data: [70, 70, 70, 70, 70, 70] }] }}
+              width={CHART_W} height={100}
+              chartConfig={chartCfg('#06B6D4', true)}
+              bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
+              style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: 0.2 }}
+              yAxisSuffix={` ${wLabel}`}
+              segments={2} fromZero={false}
+            />
+          </>
         )}
       </View>
 
       {/* Calories balance */}
-      {calDays.length >= 2 && (
-        <View style={card.box}>
-          <Text style={card.title}>Balance calorique</Text>
-          <View style={calStyles.pills}>
-            <CalPill label="Brûlées" value={calBurned.reduce((s: number, v: number) => s + v, 0)} color={Colors.electric} />
-            <CalPill label="Consommées" value={calConsumed.reduce((s: number, v: number) => s + v, 0)} color={Colors.textSecondary} />
-            <CalPill
-              label="Balance"
-              value={calConsumed.reduce((s: number, v: number) => s + v, 0) - calBurned.reduce((s: number, v: number) => s + v, 0)}
-              color={Colors.success}
-              sign
+      <View style={card.box}>
+        <Text style={card.title}>🔥 Balance calorique</Text>
+        {hasCalData ? (
+          <>
+            <View style={calStyles.pills}>
+              <CalPill label="Brûlées"    value={calBurned.reduce((s: number, v: number) => s + v, 0)} color={Colors.electric} />
+              <CalPill label="Consommées" value={calConsumed.reduce((s: number, v: number) => s + v, 0)} color={Colors.textSecondary} />
+              <CalPill label="Balance" sign
+                value={calConsumed.reduce((s: number, v: number) => s + v, 0) - calBurned.reduce((s: number, v: number) => s + v, 0)}
+                color={Colors.success}
+              />
+            </View>
+            <BarChart
+              data={{ labels: calLabels, datasets: [{ data: calBurned }] }}
+              width={CHART_W} height={110}
+              yAxisLabel="" yAxisSuffix=" kcal"
+              chartConfig={chartCfg('#F97316')}
+              withInnerLines={false} showBarTops={false}
+              style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
+              fromZero
             />
-          </View>
-          <BarChart
-            data={{ labels: calLabels, datasets: [{ data: calBurned }] }}
-            width={CHART_W}
-            height={110}
-            yAxisLabel="" yAxisSuffix=" kcal"
-            chartConfig={chartCfg()}
-            withInnerLines={false} showBarTops={false}
-            style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
-            fromZero
-          />
-        </View>
-      )}
+          </>
+        ) : (
+          <>
+            <Text style={card.emptyHint}>Enregistre ton alimentation pour voir la balance</Text>
+            <BarChart
+              data={{ labels: emptyLabels, datasets: [{ data: emptyVals }] }}
+              width={CHART_W} height={100}
+              yAxisLabel="" yAxisSuffix=" kcal"
+              chartConfig={chartCfg('#F97316', true)}
+              withInnerLines={false} showBarTops={false}
+              style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm, opacity: 0.2 }}
+              fromZero
+            />
+          </>
+        )}
+      </View>
     </>
+  )
+}
+
+function EmptyBarChart({ label }: { label: string }) {
+  return (
+    <View style={{ opacity: 0.3 }}>
+      <Text style={{ fontSize: FontSize.xs, color: Colors.textTertiary, marginBottom: 4 }}>{label}</Text>
+      <BarChart
+        data={{ labels: ['—', '—', '—', '—', '—', '—'], datasets: [{ data: [0, 0, 0, 0, 0, 0] }] }}
+        width={CHART_W} height={80}
+        yAxisLabel="" yAxisSuffix=""
+        chartConfig={chartCfg(Colors.textTertiary, true)}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
+        fromZero
+      />
+    </View>
   )
 }
 
@@ -342,11 +472,11 @@ function CalPill({ label, value, color, sign }: { label: string; value: number; 
 
 // ── Shared atoms ──────────────────────────────────────────────
 
-function KpiCard({ icon, label, value }: { icon: string; label: string; value: string }) {
+function KpiCard({ icon, label, value, accent }: { icon: string; label: string; value: string; accent: string }) {
   return (
-    <View style={kpi.card}>
+    <View style={[kpi.card, { borderTopColor: accent, borderTopWidth: 3 }]}>
       <Text style={kpi.icon}>{icon}</Text>
-      <Text style={kpi.value}>{value}</Text>
+      <Text style={[kpi.value, { color: accent }]}>{value}</Text>
       <Text style={kpi.label}>{label}</Text>
     </View>
   )
@@ -358,11 +488,18 @@ const SPORT_LABEL: Record<SportType, string> = {
   football: 'Football', tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
 }
 
-function chartCfg() {
+function chartCfg(accent: string = Colors.electric, empty = false) {
   return {
     backgroundGradientFrom: Colors.bgCard,
     backgroundGradientTo: Colors.bgCard,
-    color: (o = 1) => `rgba(0,85,255,${o})`,
+    color: (o = 1) => {
+      if (empty) return `rgba(160,160,180,${o * 0.5})`
+      const hex = accent.replace('#', '')
+      const r = parseInt(hex.slice(0, 2), 16) || 0
+      const g = parseInt(hex.slice(2, 4), 16) || 0
+      const b = parseInt(hex.slice(4, 6), 16) || 0
+      return `rgba(${r},${g},${b},${o})`
+    },
     labelColor: () => Colors.textTertiary,
     strokeWidth: 2.5,
     barPercentage: 0.55,
@@ -381,15 +518,33 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgAlt,
     borderRadius: Radius.md,
     padding: 3,
-    gap: 3,
+    gap: 0,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 3,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.bgCard,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   tab: {
     flex: 1,
     paddingVertical: 8,
     borderRadius: Radius.sm,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 4,
   },
-  tabActive: { backgroundColor: Colors.bgCard, ...Shadow.sm },
+  tabEmoji: { fontSize: 13 },
   tabText: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textTertiary },
   tabTextActive: { color: Colors.textPrimary, fontWeight: FontWeight.bold },
   periodRow: {
@@ -410,6 +565,8 @@ const styles = StyleSheet.create({
   periodText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
   periodTextActive: { color: '#fff' },
   content: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 40 },
+  swipeHint: { alignItems: 'center' },
+  swipeHintText: { fontSize: 10, color: Colors.textTertiary, fontStyle: 'italic' },
 })
 
 const kpi = StyleSheet.create({
@@ -422,9 +579,10 @@ const kpi = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     ...Shadow.sm,
+    overflow: 'hidden',
   },
   icon: { fontSize: 20 },
-  value: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
+  value: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold },
   label: { fontSize: 9, color: Colors.textTertiary, textAlign: 'center' },
 })
 
@@ -442,6 +600,7 @@ const card = StyleSheet.create({
   bigNum: { fontSize: FontSize['3xl'], fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
   bigNumUnit: { fontSize: FontSize.lg, fontWeight: FontWeight.regular, color: Colors.textSecondary },
   empty: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', paddingVertical: Spacing.md },
+  emptyHint: { fontSize: FontSize.xs, color: Colors.textTertiary, fontStyle: 'italic' },
 })
 
 const breakdown = StyleSheet.create({
@@ -450,6 +609,19 @@ const breakdown = StyleSheet.create({
   barBg: { flex: 1, height: 8, backgroundColor: Colors.bgAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
   pct: { width: 32, fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'right' },
+})
+
+const calStyles = StyleSheet.create({
+  pills: { flexDirection: 'row', gap: Spacing.sm },
+  pill: {
+    flex: 1,
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    alignItems: 'center',
+  },
+  val: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
+  lab: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
 })
 
 const prStyles = StyleSheet.create({
@@ -464,19 +636,6 @@ const prStyles = StyleSheet.create({
     gap: 2,
   },
   emoji: { fontSize: 20 },
-  value: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, textAlign: 'center' },
+  value: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, textAlign: 'center' },
   label: { fontSize: 10, color: Colors.textTertiary, textAlign: 'center' },
-})
-
-const calStyles = StyleSheet.create({
-  pills: { flexDirection: 'row', gap: Spacing.sm },
-  pill: {
-    flex: 1,
-    backgroundColor: Colors.bgAlt,
-    borderRadius: Radius.sm,
-    padding: Spacing.sm,
-    alignItems: 'center',
-  },
-  val: { fontSize: FontSize.md, fontWeight: FontWeight.bold },
-  lab: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
 })
