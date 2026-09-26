@@ -32,6 +32,11 @@ export const Colors = {
   gym: '#0055FF',
   badminton: '#10B981',
   athletics: '#F59E0B',
+  football: '#22C55E',
+  tennis: '#EAB308',
+  hiking: '#6366F1',
+  yoga: '#EC4899',
+  boxing: '#DC2626',
 } as const
 
 export const Spacing = {
@@ -103,4 +108,9 @@ export const SportColors: Record<SportType, string> = {
   gym: Colors.gym,
   badminton: Colors.badminton,
   athletics: Colors.athletics,
+  football: Colors.football,
+  tennis: Colors.tennis,
+  hiking: Colors.hiking,
+  yoga: Colors.yoga,
+  boxing: Colors.boxing,
 }

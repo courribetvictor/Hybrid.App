@@ -28,6 +28,11 @@ export const fr = {
     gym: 'Muscu',
     badminton: 'Badminton',
     athletics: 'Athlétisme',
+    football: 'Football',
+    tennis: 'Tennis',
+    hiking: 'Randonnée',
+    yoga: 'Yoga',
+    boxing: 'Boxe',
   },
 
   activity: {

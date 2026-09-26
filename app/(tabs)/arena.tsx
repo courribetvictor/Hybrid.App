@@ -19,7 +19,7 @@ import { ChallengeCard } from '@/components/arena/ChallengeCard'
 import { PaywallModal } from '@/components/arena/PaywallModal'
 import { FriendSearch } from '@/components/arena/FriendSearch'
 import { Avatar } from '@/components/ui/Avatar'
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/theme'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { useGlobalLeaderboard, useClubLeaderboard } from '@/hooks/useLeaderboard'
 import { useWeeklyChallenges } from '@/hooks/useWeeklyChallenges'
 import { useFriendships } from '@/hooks/useFriendships'
@@ -245,7 +245,7 @@ function FriendsTab({ friends, friendIds, currentUserId, onRequestSent }: any) {
       sections={[{ title: '', data: friends }]}
       keyExtractor={(item: any) => item.friendId}
       ListHeaderComponent={
-        <View style={{ gap: Spacing.md, marginBottom: Spacing.md }}>
+        <View style={{ gap: Spacing.md, marginBottom: Spacing.sm }}>
           <FriendSearch
             currentUserId={currentUserId}
             friendIds={friendIds}
@@ -258,22 +258,52 @@ function FriendsTab({ friends, friendIds, currentUserId, onRequestSent }: any) {
           )}
         </View>
       }
-      renderItem={({ item }: any) => (
-        <View style={friendStyles.row}>
-          <Avatar uri={item.profile.avatar_url} username={item.profile.username} isPro={item.profile.is_pro} size={40} />
-          <Text style={friendStyles.name}>{item.profile.username}</Text>
-        </View>
-      )}
+      renderItem={({ item }: any) => <FriendCard friend={item} />}
+      ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
       ListEmptyComponent={
         <View style={emptyStyles.container}>
           <Text style={emptyStyles.emoji}>👥</Text>
           <Text style={emptyStyles.text}>Recherche des amis ci-dessus</Text>
+          <Text style={emptyStyles.sub}>Tape un pseudo pour ajouter quelqu'un</Text>
         </View>
       }
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
       renderSectionHeader={() => null}
     />
+  )
+}
+
+function FriendCard({ friend }: { friend: any }) {
+  const score = friend.profile?.hybrid_score ?? 0
+  const scoreColor = score >= 700 ? '#F59E0B' : score >= 400 ? Colors.electric : Colors.textTertiary
+
+  return (
+    <View style={friendStyles.card}>
+      <Avatar
+        uri={friend.profile.avatar_url}
+        username={friend.profile.username}
+        isPro={friend.profile.is_pro}
+        size={46}
+      />
+      <View style={friendStyles.cardInfo}>
+        <View style={friendStyles.cardTop}>
+          <Text style={friendStyles.cardName}>{friend.profile.username}</Text>
+          {friend.profile.is_pro && (
+            <View style={friendStyles.proBadge}>
+              <Text style={friendStyles.proText}>⚡ PRO</Text>
+            </View>
+          )}
+        </View>
+        <View style={friendStyles.scoreRow}>
+          <Text style={[friendStyles.scoreVal, { color: scoreColor }]}>{score}</Text>
+          <Text style={friendStyles.scoreLabel}> pts</Text>
+          <View style={friendStyles.scoreBarBg}>
+            <View style={[friendStyles.scoreBarFill, { width: `${Math.min(score / 10, 100)}%` as any, backgroundColor: scoreColor }]} />
+          </View>
+        </View>
+      </View>
+    </View>
   )
 }
 
@@ -363,6 +393,30 @@ const friendStyles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
     color: Colors.textSecondary,
   },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadow.sm,
+  },
+  cardInfo: { flex: 1, gap: 5 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  cardName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary, flex: 1 },
+  proBadge: {
+    backgroundColor: Colors.electricDim,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  proText: { fontSize: 9, fontWeight: FontWeight.bold, color: Colors.electric },
+  scoreRow: { flexDirection: 'row', alignItems: 'center' },
+  scoreVal: { fontSize: FontSize.sm, fontWeight: FontWeight.bold },
+  scoreLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, marginRight: Spacing.xs },
+  scoreBarBg: { flex: 1, height: 4, backgroundColor: Colors.bgAlt, borderRadius: 2, overflow: 'hidden' },
+  scoreBarFill: { height: '100%', borderRadius: 2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -387,6 +441,11 @@ const emptyStyles = StyleSheet.create({
   emoji: { fontSize: 40 },
   text: {
     fontSize: FontSize.md,
+    color: Colors.textTertiary,
+    textAlign: 'center',
+  },
+  sub: {
+    fontSize: FontSize.sm,
     color: Colors.textTertiary,
     textAlign: 'center',
   },

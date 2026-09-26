@@ -7,6 +7,7 @@ import type { WeeklyChallenge } from '@/types/database'
 const SPORT_EMOJI: Record<string, string> = {
   running: '🏃', cycling: '🚴', swimming: '🏊',
   gym: '🏋️', badminton: '🏸', athletics: '⚡',
+  football: '⚽', tennis: '🎾', hiking: '🥾', yoga: '🧘', boxing: '🥊',
 }
 
 interface ChallengeCardProps {

@@ -10,7 +10,7 @@ import {
 import { LineChart, BarChart } from 'react-native-chart-kit'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { formatPace, formatDistance } from '@/lib/units'
-import type { Activity, SportType, GymMetrics, EnduranceMetrics, BadmintonMetrics } from '@/types/database'
+import type { Activity, SportType, GymMetrics, EnduranceMetrics, BadmintonMetrics, FootballMetrics, TennisMetrics, YogaMetrics, BoxingMetrics } from '@/types/database'
 import type { PreferredUnit } from '@/types/database'
 
 const SCREEN_W = Dimensions.get('window').width
@@ -21,8 +21,13 @@ const SPORT_FILTERS: { key: SportType; label: string; emoji: string }[] = [
   { key: 'running',   label: 'Course',     emoji: '🏃' },
   { key: 'cycling',   label: 'Vélo',       emoji: '🚴' },
   { key: 'swimming',  label: 'Natation',   emoji: '🏊' },
+  { key: 'hiking',    label: 'Randonnée',  emoji: '🥾' },
+  { key: 'football',  label: 'Football',   emoji: '⚽' },
+  { key: 'tennis',    label: 'Tennis',     emoji: '🎾' },
   { key: 'badminton', label: 'Badminton',  emoji: '🏸' },
+  { key: 'boxing',    label: 'Boxe',       emoji: '🥊' },
   { key: 'athletics', label: 'Athlétisme', emoji: '⚡' },
+  { key: 'yoga',      label: 'Yoga',       emoji: '🧘' },
 ]
 
 interface SportStatsTabProps {
@@ -65,7 +70,12 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
           {(activeSport === 'running' || activeSport === 'cycling' || activeSport === 'swimming') && (
             <EnduranceStats activities={filtered} unit={unit} sport={activeSport} />
           )}
+          {activeSport === 'hiking' && <HikingStats activities={filtered} unit={unit} />}
           {activeSport === 'badminton' && <BadmintonStats activities={filtered} />}
+          {activeSport === 'tennis' && <TennisStats activities={filtered} />}
+          {activeSport === 'football' && <FootballStats activities={filtered} />}
+          {activeSport === 'boxing' && <BoxingStats activities={filtered} />}
+          {activeSport === 'yoga' && <YogaStats activities={filtered} />}
           {activeSport === 'athletics' && <AthleticsStats activities={filtered} />}
         </>
       )}
@@ -404,6 +414,313 @@ function AthleticsStats({ activities }: { activities: Activity[] }) {
   )
 }
 
+// ── Hiking stats : distance + dénivelé ───────────────────────
+
+function HikingStats({ activities, unit }: { activities: Activity[]; unit: PreferredUnit }) {
+  const distLabel = unit === 'imperial' ? 'mi' : 'km'
+
+  const data = useMemo(() =>
+    activities.map(a => {
+      const m = a.metrics as EnduranceMetrics
+      const dist = m.distance_m
+        ? unit === 'imperial'
+          ? parseFloat(((m.distance_m / 1000) * 0.621371).toFixed(2))
+          : parseFloat((m.distance_m / 1000).toFixed(2))
+        : 0
+      return { date: a.created_at.slice(5, 10), dist, elevation: m.elevation_m ?? 0 }
+    }),
+    [activities, unit],
+  )
+
+  const totalDist = data.reduce((s, d) => s + d.dist, 0)
+  const totalElev = activities.reduce((s, a) => s + ((a.metrics as EnduranceMetrics).elevation_m ?? 0), 0)
+  const bestElev = Math.max(...data.map(d => d.elevation))
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Résumé</Text>
+        <View style={styles.statRow}>
+          <StatMini label={`Distance totale`} value={`${totalDist.toFixed(1)} ${distLabel}`} />
+          <StatMini label="Dénivelé total" value={`${totalElev} m`} />
+          <StatMini label="Meilleur D+" value={`${bestElev} m`} highlight />
+        </View>
+      </View>
+
+      {data.length >= 2 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Dénivelé par sortie (m)</Text>
+          <BarChart
+            data={{
+              labels: data.map(d => d.date),
+              datasets: [{ data: data.map(d => d.elevation) }],
+            }}
+            width={CHART_W - Spacing.md * 2}
+            height={120}
+            yAxisLabel=""
+            yAxisSuffix=""
+            chartConfig={makeChartConfig(SportColors.hiking)}
+            withInnerLines={false}
+            showBarTops={false}
+            style={styles.chart}
+            fromZero
+          />
+        </View>
+      )}
+    </>
+  )
+}
+
+// ── Football stats ────────────────────────────────────────────
+
+function FootballStats({ activities }: { activities: Activity[] }) {
+  const stats = useMemo(() => {
+    let wins = 0, losses = 0, totalGoals = 0, totalAssists = 0
+    for (const a of activities) {
+      const m = a.metrics as FootballMetrics
+      if (m.match_won) wins++; else losses++
+      totalGoals += m.goals_scored ?? 0
+      totalAssists += m.assists ?? 0
+    }
+    const total = wins + losses
+    return {
+      wins, losses, total,
+      winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
+      totalGoals, totalAssists,
+      avgGoals: total > 0 ? parseFloat((totalGoals / total).toFixed(1)) : 0,
+    }
+  }, [activities])
+
+  const matchResults = activities.map(a => (a.metrics as FootballMetrics).match_won ? 1 : 0)
+  const goalsData = activities.map(a => (a.metrics as FootballMetrics).goals_scored ?? 0)
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Bilan matchs</Text>
+        <View style={styles.statRow}>
+          <StatMini label="Victoires" value={String(stats.wins)} color={Colors.success} />
+          <StatMini label="Défaites" value={String(stats.losses)} color={Colors.error} />
+          <StatMini label="Win rate" value={`${stats.winRate}%`} highlight />
+        </View>
+        <View style={styles.winRateBar}>
+          <View style={[styles.winFill, { flex: stats.winRate }]} />
+          <View style={[styles.lossFill, { flex: 100 - stats.winRate }]} />
+        </View>
+        <View style={styles.statRow}>
+          <StatMini label="Buts totaux" value={String(stats.totalGoals)} />
+          <StatMini label="Passes déc." value={String(stats.totalAssists)} />
+          <StatMini label="Buts / match" value={String(stats.avgGoals)} />
+        </View>
+      </View>
+
+      {matchResults.length >= 3 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Résultats récents</Text>
+          <View style={styles.resultDots}>
+            {matchResults.slice(-20).map((r, i) => (
+              <View key={i} style={[styles.resultDot, { backgroundColor: r === 1 ? Colors.success : Colors.error }]} />
+            ))}
+          </View>
+        </View>
+      )}
+
+      {goalsData.length >= 2 && goalsData.some(g => g > 0) && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Buts par match</Text>
+          <BarChart
+            data={{
+              labels: activities.map(a => a.created_at.slice(5, 10)),
+              datasets: [{ data: goalsData }],
+            }}
+            width={CHART_W - Spacing.md * 2}
+            height={120}
+            yAxisLabel=""
+            yAxisSuffix=""
+            chartConfig={makeChartConfig(SportColors.football)}
+            withInnerLines={false}
+            showBarTops={false}
+            style={styles.chart}
+            fromZero
+          />
+        </View>
+      )}
+    </>
+  )
+}
+
+// ── Tennis stats ──────────────────────────────────────────────
+
+function TennisStats({ activities }: { activities: Activity[] }) {
+  const stats = useMemo(() => {
+    let wins = 0, losses = 0, totalAces = 0
+    for (const a of activities) {
+      const m = a.metrics as TennisMetrics
+      if (m.match_won) wins++; else losses++
+      totalAces += m.aces ?? 0
+    }
+    const total = wins + losses
+    return {
+      wins, losses, total,
+      winRate: total > 0 ? Math.round((wins / total) * 100) : 0,
+      totalAces,
+      avgAces: total > 0 ? parseFloat((totalAces / total).toFixed(1)) : 0,
+    }
+  }, [activities])
+
+  const matchResults = activities.map(a => (a.metrics as TennisMetrics).match_won ? 1 : 0)
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Bilan matchs</Text>
+        <View style={styles.statRow}>
+          <StatMini label="Victoires" value={String(stats.wins)} color={Colors.success} />
+          <StatMini label="Défaites" value={String(stats.losses)} color={Colors.error} />
+          <StatMini label="Win rate" value={`${stats.winRate}%`} highlight />
+        </View>
+        <View style={styles.winRateBar}>
+          <View style={[styles.winFill, { flex: stats.winRate }]} />
+          <View style={[styles.lossFill, { flex: 100 - stats.winRate }]} />
+        </View>
+        <View style={styles.statRow}>
+          <StatMini label="Aces totaux" value={String(stats.totalAces)} />
+          <StatMini label="Aces / match" value={String(stats.avgAces)} />
+          <StatMini label="Matchs joués" value={String(stats.total)} />
+        </View>
+      </View>
+
+      {matchResults.length >= 3 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Résultats récents</Text>
+          <View style={styles.resultDots}>
+            {matchResults.slice(-20).map((r, i) => (
+              <View key={i} style={[styles.resultDot, { backgroundColor: r === 1 ? Colors.success : Colors.error }]} />
+            ))}
+          </View>
+        </View>
+      )}
+    </>
+  )
+}
+
+// ── Yoga stats ────────────────────────────────────────────────
+
+function YogaStats({ activities }: { activities: Activity[] }) {
+  const stats = useMemo(() => {
+    const styleCount: Record<string, number> = {}
+    let totalMinutes = 0
+    for (const a of activities) {
+      const m = a.metrics as YogaMetrics
+      const style = m.style ?? 'other'
+      styleCount[style] = (styleCount[style] ?? 0) + 1
+      totalMinutes += Math.round(a.duration_seconds / 60)
+    }
+    return { styleCount, totalMinutes, sessions: activities.length }
+  }, [activities])
+
+  const STYLE_LABELS: Record<string, string> = {
+    hatha: 'Hatha', vinyasa: 'Vinyasa', yin: 'Yin',
+    ashtanga: 'Ashtanga', power: 'Power', other: 'Autre',
+  }
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Résumé</Text>
+        <View style={styles.statRow}>
+          <StatMini label="Séances" value={String(stats.sessions)} />
+          <StatMini label="Temps total" value={`${Math.round(stats.totalMinutes / 60)}h ${stats.totalMinutes % 60}m`} highlight />
+          <StatMini label="Moy./séance" value={`${Math.round(stats.totalMinutes / (stats.sessions || 1))} min`} />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Répartition par style</Text>
+        {Object.entries(stats.styleCount).map(([key, count]) => (
+          <View key={key} style={styles.athleticsRow}>
+            <Text style={styles.athleticsEvent}>{STYLE_LABELS[key] ?? key}</Text>
+            <View style={styles.athleticsRight}>
+              <Text style={styles.athleticsBest}>{count} séance{count > 1 ? 's' : ''}</Text>
+              <Text style={styles.athleticsCount}>
+                {Math.round((count / stats.sessions) * 100)}%
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </>
+  )
+}
+
+// ── Boxing stats ──────────────────────────────────────────────
+
+function BoxingStats({ activities }: { activities: Activity[] }) {
+  const stats = useMemo(() => {
+    const typeCount: Record<string, number> = {}
+    let totalRounds = 0
+    for (const a of activities) {
+      const m = a.metrics as BoxingMetrics
+      const type = m.bout_type ?? 'bag'
+      typeCount[type] = (typeCount[type] ?? 0) + 1
+      totalRounds += m.rounds ?? 0
+    }
+    return { typeCount, totalRounds, sessions: activities.length }
+  }, [activities])
+
+  const TYPE_LABELS: Record<string, string> = {
+    bag: 'Sac', pad_work: 'Pattes', sparring: 'Sparring', competition: 'Compétition',
+  }
+
+  const roundsData = activities.map(a => (a.metrics as BoxingMetrics).rounds ?? 0)
+
+  return (
+    <>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Résumé</Text>
+        <View style={styles.statRow}>
+          <StatMini label="Séances" value={String(stats.sessions)} />
+          <StatMini label="Rounds totaux" value={String(stats.totalRounds)} highlight />
+          <StatMini label="Rounds / séance" value={stats.sessions > 0 ? (stats.totalRounds / stats.sessions).toFixed(1) : '0'} />
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Répartition par type</Text>
+        {Object.entries(stats.typeCount).map(([key, count]) => (
+          <View key={key} style={styles.athleticsRow}>
+            <Text style={styles.athleticsEvent}>{TYPE_LABELS[key] ?? key}</Text>
+            <View style={styles.athleticsRight}>
+              <Text style={styles.athleticsBest}>{count} séance{count > 1 ? 's' : ''}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {roundsData.length >= 2 && roundsData.some(r => r > 0) && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Rounds par séance</Text>
+          <BarChart
+            data={{
+              labels: activities.map(a => a.created_at.slice(5, 10)),
+              datasets: [{ data: roundsData }],
+            }}
+            width={CHART_W - Spacing.md * 2}
+            height={120}
+            yAxisLabel=""
+            yAxisSuffix=""
+            chartConfig={makeChartConfig(SportColors.boxing)}
+            withInnerLines={false}
+            showBarTops={false}
+            style={styles.chart}
+            fromZero
+          />
+        </View>
+      )}
+    </>
+  )
+}
+
 // ── Shared atoms ──────────────────────────────────────────────
 
 function StatMini({ label, value, highlight, color }: {
@@ -423,6 +740,7 @@ function EmptyState({ sport }: { sport: SportType }) {
   const EMOJI: Record<SportType, string> = {
     running: '🏃', cycling: '🚴', swimming: '🏊',
     gym: '🏋️', badminton: '🏸', athletics: '⚡',
+    football: '⚽', tennis: '🎾', hiking: '🥾', yoga: '🧘', boxing: '🥊',
   }
   return (
     <View style={styles.empty}>

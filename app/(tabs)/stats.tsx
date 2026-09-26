@@ -269,6 +269,7 @@ function KpiCard({ icon, label, value }: { icon: string; label: string; value: s
 const SPORT_LABEL: Record<SportType, string> = {
   running: 'Course', cycling: 'Vélo', swimming: 'Natation',
   gym: 'Muscu', badminton: 'Badminton', athletics: 'Athlétisme',
+  football: 'Football', tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
 }
 
 function chartCfg() {

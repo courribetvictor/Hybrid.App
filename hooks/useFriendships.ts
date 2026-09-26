@@ -4,7 +4,7 @@ import type { Profile } from '@/types/database'
 
 interface FriendWithProfile {
   friendId: string
-  profile: Pick<Profile, 'id' | 'username' | 'avatar_url' | 'is_pro'>
+  profile: Pick<Profile, 'id' | 'username' | 'avatar_url' | 'is_pro' | 'hybrid_score'>
 }
 
 export function useFriendships(userId: string | undefined) {
@@ -17,7 +17,7 @@ export function useFriendships(userId: string | undefined) {
 
     const { data } = await supabase
       .from('friendships')
-      .select('friend_id, profile:profiles!friend_id(id, username, avatar_url, is_pro)')
+      .select('friend_id, profile:profiles!friend_id(id, username, avatar_url, is_pro, hybrid_score)')
       .eq('user_id', userId)
       .eq('status', 'accepted')
 

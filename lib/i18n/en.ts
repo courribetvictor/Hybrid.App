@@ -30,6 +30,11 @@ export const en: Translations = {
     gym: 'Gym',
     badminton: 'Badminton',
     athletics: 'Athletics',
+    football: 'Football',
+    tennis: 'Tennis',
+    hiking: 'Hiking',
+    yoga: 'Yoga',
+    boxing: 'Boxing',
   },
 
   activity: {

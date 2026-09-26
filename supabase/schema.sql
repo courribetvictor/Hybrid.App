@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TYPE preferred_unit   AS ENUM ('metric', 'imperial');
 CREATE TYPE preferred_language AS ENUM ('fr', 'en');
-CREATE TYPE sport_type       AS ENUM ('running', 'cycling', 'swimming', 'gym', 'badminton', 'athletics');
+CREATE TYPE sport_type       AS ENUM ('running', 'cycling', 'swimming', 'gym', 'badminton', 'athletics', 'football', 'tennis', 'hiking', 'yoga', 'boxing');
 CREATE TYPE friendship_status AS ENUM ('pending', 'accepted');
 
 -- ============================================================

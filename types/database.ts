@@ -4,7 +4,9 @@
 
 export type PreferredUnit = 'metric' | 'imperial'
 export type PreferredLanguage = 'fr' | 'en'
-export type SportType = 'running' | 'cycling' | 'swimming' | 'gym' | 'badminton' | 'athletics'
+export type SportType =
+  | 'running' | 'cycling' | 'swimming' | 'gym' | 'badminton' | 'athletics'
+  | 'football' | 'tennis' | 'hiking' | 'yoga' | 'boxing'
 export type FriendshipStatus = 'pending' | 'accepted'
 
 // ── Sport-specific JSONB metric shapes ──────────────────────
@@ -52,11 +54,50 @@ export interface AthleticsMetrics {
   wind_speed?: number    // m/s, for sprints/jumps
 }
 
+export interface FootballMetrics {
+  match_won?: boolean
+  goals_scored?: number
+  assists?: number
+  position?: 'goalkeeper' | 'defender' | 'midfielder' | 'forward'
+  distance_m?: number
+}
+
+export interface TennisSet {
+  player_games: number
+  opponent_games: number
+}
+
+export interface TennisMetrics {
+  sets: TennisSet[]
+  match_won: boolean
+  aces?: number
+  double_faults?: number
+}
+
+export type YogaStyle = 'hatha' | 'vinyasa' | 'yin' | 'ashtanga' | 'power' | 'other'
+
+export interface YogaMetrics {
+  style?: YogaStyle
+  avg_heart_rate?: number
+}
+
+export type BoxingBoutType = 'sparring' | 'bag' | 'pad_work' | 'competition'
+
+export interface BoxingMetrics {
+  rounds?: number
+  bout_type?: BoxingBoutType
+  avg_heart_rate?: number
+}
+
 export type ActivityMetrics =
   | EnduranceMetrics
   | GymMetrics
   | BadmintonMetrics
   | AthleticsMetrics
+  | FootballMetrics
+  | TennisMetrics
+  | YogaMetrics
+  | BoxingMetrics
 
 // ── Database row types ───────────────────────────────────────
 

@@ -20,6 +20,11 @@ const SPORT_LABELS: Record<SportType, string> = {
   gym: 'Muscu',
   badminton: 'Badminton',
   athletics: 'Athlétisme',
+  football: 'Football',
+  tennis: 'Tennis',
+  hiking: 'Randonnée',
+  yoga: 'Yoga',
+  boxing: 'Boxe',
 }
 
 export function SportsPieChart({ breakdown, labelFn }: SportsPieChartProps) {

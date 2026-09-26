@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
@@ -23,13 +23,69 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { PaywallModal } from '@/components/arena/PaywallModal'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { useProfile, useSession } from '@/hooks/useProfile'
 import { useActivities } from '@/hooks/useActivities'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
+import { useWeeklyGoal } from '@/hooks/useGoal'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
-import type { PreferredUnit, Profile } from '@/types/database'
+import type { PreferredUnit, Profile, SportType, Activity } from '@/types/database'
+
+// ── Constants ─────────────────────────────────────────────────
+
+const SPORT_EMOJI: Record<SportType, string> = {
+  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
+  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
+  hiking: '🥾', yoga: '🧘', boxing: '🥊',
+}
+const SPORT_LABEL: Record<SportType, string> = {
+  running: 'Course', cycling: 'Vélo', swimming: 'Natation', gym: 'Muscu',
+  badminton: 'Badminton', athletics: 'Athlétisme', football: 'Football',
+  tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
+}
+
+interface Achievement {
+  id: string; emoji: string; label: string; desc: string
+  check: (p: { count: number; sports: number; streak: number; totalHours: number }) => boolean
+}
+
+const ACHIEVEMENTS: Achievement[] = [
+  { id: 'first_step',    emoji: '🌱', label: 'Premiers pas',     desc: '1ère séance',        check: ({ count }) => count >= 1 },
+  { id: 'ten',           emoji: '🔟', label: 'En route',         desc: '10 séances',         check: ({ count }) => count >= 10 },
+  { id: 'fifty',         emoji: '⭐', label: 'Régulier',         desc: '50 séances',         check: ({ count }) => count >= 50 },
+  { id: 'hundred',       emoji: '💯', label: 'Centurion',        desc: '100 séances',        check: ({ count }) => count >= 100 },
+  { id: 'three_sports',  emoji: '🎯', label: 'Hybride',          desc: '3 sports différents',check: ({ sports }) => sports >= 3 },
+  { id: 'five_sports',   emoji: '🌟', label: 'Polyvalent',       desc: '5 sports différents',check: ({ sports }) => sports >= 5 },
+  { id: 'seven_sports',  emoji: '👑', label: 'Athlète complet',  desc: '7 sports différents',check: ({ sports }) => sports >= 7 },
+  { id: 'ten_hours',     emoji: '⏱', label: 'Endurant',         desc: '10h d\'entraînement', check: ({ totalHours }) => totalHours >= 10 },
+  { id: 'fifty_hours',   emoji: '🏆', label: 'Passionné',        desc: '50h d\'entraînement', check: ({ totalHours }) => totalHours >= 50 },
+  { id: 'streak_7',      emoji: '🔥', label: 'Semaine de feu',   desc: '7j consécutifs',     check: ({ streak }) => streak >= 7 },
+  { id: 'streak_30',     emoji: '🚀', label: 'Mois de fer',      desc: '30j consécutifs',    check: ({ streak }) => streak >= 30 },
+]
+
+function computeStreak(activities: Activity[]): number {
+  if (!activities.length) return 0
+  const days = new Set(activities.map(a => a.created_at.split('T')[0]))
+  const today = new Date()
+  for (let offset = 0; offset <= 1; offset++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - offset)
+    const key = d.toISOString().split('T')[0]
+    if (days.has(key)) {
+      let streak = 0
+      const cur = new Date(d)
+      while (days.has(cur.toISOString().split('T')[0])) {
+        streak++
+        cur.setDate(cur.getDate() - 1)
+      }
+      return streak
+    }
+  }
+  return 0
+}
+
+const GOAL_OPTIONS = [2, 3, 4, 5, 6, 7]
 
 const HYBRID_SCORE_MAX = 1000
 
@@ -47,11 +103,13 @@ export default function ProfileScreen() {
   const { profile, updateProfile } = useProfile(userId ?? undefined)
   const { activities } = useActivities(userId ?? undefined, 365)
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, 90)
+  const { weeklyGoal, setGoal, clearGoal } = useWeeklyGoal()
 
   const [paywallVisible, setPaywallVisible] = useState(false)
   const [editVisible, setEditVisible] = useState(false)
   const [notifVisible, setNotifVisible] = useState(false)
   const [privacyVisible, setPrivacyVisible] = useState(false)
+  const [goalVisible, setGoalVisible] = useState(false)
 
   const unit = profile?.preferred_unit ?? 'metric'
   const lang = profile?.preferred_language ?? 'fr'
@@ -90,7 +148,25 @@ export default function ProfileScreen() {
 
   const wLabel = unit === 'imperial' ? 'lbs' : 'kg'
   const weightDisplay = latestWeight ? displayWeight(latestWeight, unit) : null
-  const recentSports = [...new Set(activities.slice(0, 10).map((a: any) => a.sport_type))]
+
+  // Derived profile data
+  const allSports = useMemo(
+    () => [...new Set(activities.map((a: Activity) => a.sport_type))] as SportType[],
+    [activities],
+  )
+  const streak = useMemo(() => computeStreak(activities as Activity[]), [activities])
+  const totalHours = Math.floor(activities.reduce((s: number, a: any) => s + a.duration_seconds, 0) / 3600)
+
+  const achievementParams = { count: activities.length, sports: allSports.length, streak, totalHours }
+  const unlockedCount = ACHIEVEMENTS.filter(a => a.check(achievementParams)).length
+
+  // This week sessions count (for goal progress)
+  const thisWeekSessions = useMemo(() => {
+    const monday = new Date()
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+    monday.setHours(0, 0, 0, 0)
+    return (activities as Activity[]).filter(a => new Date(a.created_at) >= monday).length
+  }, [activities])
 
   return (
     <View style={styles.safe}>
@@ -107,11 +183,18 @@ export default function ProfileScreen() {
             size={72}
           />
           <Text style={styles.name}>{profile?.username ?? '—'}</Text>
-          {profile?.is_pro && (
-            <View style={styles.proBadge}>
-              <Text style={styles.proText}>⚡ PRO</Text>
-            </View>
-          )}
+          <View style={styles.heroBadges}>
+            {profile?.is_pro && (
+              <View style={styles.proBadge}>
+                <Text style={styles.proText}>⚡ PRO</Text>
+              </View>
+            )}
+            {streak >= 2 && (
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakText}>🔥 {streak} j</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.joined}>
             Membre depuis {profile?.created_at
               ? new Date(profile.created_at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
@@ -142,7 +225,85 @@ export default function ProfileScreen() {
             label="Volume total"
             icon="⏱"
           />
-          <QuickStat value={String(recentSports.length)} label="Sports" icon="🎯" />
+          <QuickStat value={String(allSports.length)} label="Sports" icon="🎯" />
+          <QuickStat value={`${totalHours}h`} label="Total" icon="⚡" />
+        </View>
+
+        {/* Sport badges */}
+        {allSports.length > 0 && (
+          <View style={sportBadgeStyles.card}>
+            <Text style={sportBadgeStyles.title}>Tes disciplines</Text>
+            <View style={sportBadgeStyles.row}>
+              {allSports.map(sport => (
+                <View
+                  key={sport}
+                  style={[sportBadgeStyles.chip, { backgroundColor: SportColors[sport] + '18', borderColor: SportColors[sport] + '40' }]}
+                >
+                  <Text style={sportBadgeStyles.emoji}>{SPORT_EMOJI[sport]}</Text>
+                  <Text style={[sportBadgeStyles.label, { color: SportColors[sport] }]}>
+                    {SPORT_LABEL[sport]}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Objectif hebdomadaire */}
+        <TouchableOpacity
+          style={goalStyles.card}
+          activeOpacity={0.8}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGoalVisible(true) }}
+        >
+          <View style={goalStyles.left}>
+            <Text style={goalStyles.title}>🎯  Objectif hebdo</Text>
+            <Text style={goalStyles.sub}>
+              {weeklyGoal !== null
+                ? `${thisWeekSessions} / ${weeklyGoal} séances cette semaine`
+                : 'Définis ton objectif de séances par semaine'}
+            </Text>
+          </View>
+          <View style={goalStyles.right}>
+            {weeklyGoal !== null ? (
+              <>
+                <Text style={goalStyles.goalNum}>{weeklyGoal}</Text>
+                <Text style={goalStyles.goalUnit}>/ sem.</Text>
+              </>
+            ) : (
+              <Text style={goalStyles.setLabel}>Définir →</Text>
+            )}
+          </View>
+          {weeklyGoal !== null && (
+            <View style={goalStyles.barWrap}>
+              <View style={goalStyles.bar}>
+                <View style={[goalStyles.barFill, { width: `${Math.min(thisWeekSessions / weeklyGoal, 1) * 100}%` as any }]} />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Achievements */}
+        <View style={achieveStyles.card}>
+          <View style={achieveStyles.header}>
+            <Text style={achieveStyles.title}>Accomplissements</Text>
+            <Text style={achieveStyles.count}>{unlockedCount} / {ACHIEVEMENTS.length}</Text>
+          </View>
+          <View style={achieveStyles.grid}>
+            {ACHIEVEMENTS.map(a => {
+              const unlocked = a.check(achievementParams)
+              return (
+                <View key={a.id} style={[achieveStyles.badge, !unlocked && achieveStyles.badgeLocked]}>
+                  <Text style={[achieveStyles.badgeEmoji, !unlocked && achieveStyles.badgeEmojiLocked]}>
+                    {unlocked ? a.emoji : '🔒'}
+                  </Text>
+                  <Text style={[achieveStyles.badgeLabel, !unlocked && achieveStyles.badgeLabelLocked]}>
+                    {a.label}
+                  </Text>
+                  <Text style={achieveStyles.badgeDesc}>{a.desc}</Text>
+                </View>
+              )
+            })}
+          </View>
         </View>
 
         {/* Body metrics */}
@@ -233,6 +394,15 @@ export default function ProfileScreen() {
             }}
           />
           <ActionRow
+            icon="📊"
+            label="Objectif hebdomadaire"
+            badge={weeklyGoal !== null ? `${weeklyGoal} séances` : undefined}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setGoalVisible(true)
+            }}
+          />
+          <ActionRow
             icon="🔔"
             label="Notifications"
             onPress={() => {
@@ -273,17 +443,29 @@ export default function ProfileScreen() {
       <NotificationsModal visible={notifVisible} onClose={() => setNotifVisible(false)} />
       <PrivacyModal visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
       <PaywallModal visible={paywallVisible} onClose={() => setPaywallVisible(false)} />
+      <GoalModal
+        visible={goalVisible}
+        current={weeklyGoal}
+        onSave={n => { setGoal(n); setGoalVisible(false) }}
+        onClear={() => { clearGoal(); setGoalVisible(false) }}
+        onClose={() => setGoalVisible(false)}
+      />
     </View>
   )
 }
 
 // ── Sub-components ────────────────────────────────────────────
 
-function ActionRow({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function ActionRow({ icon, label, badge, onPress }: { icon: string; label: string; badge?: string; onPress: () => void }) {
   return (
     <TouchableOpacity style={actionStyles.row} onPress={onPress} activeOpacity={0.7}>
       <Text style={actionStyles.icon}>{icon}</Text>
       <Text style={actionStyles.label}>{label}</Text>
+      {badge && (
+        <View style={actionStyles.badge}>
+          <Text style={actionStyles.badgeText}>{badge}</Text>
+        </View>
+      )}
       <Text style={actionStyles.chevron}>›</Text>
     </TouchableOpacity>
   )
@@ -306,6 +488,56 @@ function BodyMetric({ label, value, sub, subColor }: { label: string; value: str
       <Text style={bodyStyles.metricValue}>{value}</Text>
       {sub && <Text style={[bodyStyles.metricSub, subColor ? { color: subColor } : undefined]}>{sub}</Text>}
     </View>
+  )
+}
+
+// ── Goal Modal ────────────────────────────────────────────────
+
+function GoalModal({
+  visible, current, onSave, onClear, onClose,
+}: {
+  visible: boolean
+  current: number | null
+  onSave: (n: number) => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  return (
+    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={sheetStyles.overlay}>
+        <TouchableOpacity style={sheetStyles.backdrop} onPress={onClose} activeOpacity={1} />
+        <View style={sheetStyles.sheet}>
+          <View style={sheetStyles.handle} />
+          <Text style={sheetStyles.sheetTitle}>🎯  Objectif hebdomadaire</Text>
+          <Text style={[sheetStyles.note, { textAlign: 'left', marginBottom: Spacing.xs }]}>
+            Combien de séances veux-tu faire par semaine ?
+          </Text>
+          <View style={goalModalStyles.grid}>
+            {GOAL_OPTIONS.map(n => (
+              <TouchableOpacity
+                key={n}
+                style={[goalModalStyles.option, current === n && goalModalStyles.optionActive]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSave(n) }}
+                activeOpacity={0.75}
+              >
+                <Text style={[goalModalStyles.optionNum, current === n && goalModalStyles.optionNumActive]}>
+                  {n}
+                </Text>
+                <Text style={[goalModalStyles.optionLabel, current === n && goalModalStyles.optionLabelActive]}>
+                  séance{n > 1 ? 's' : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {current !== null && (
+            <TouchableOpacity onPress={onClear} style={sheetStyles.cancelWrap} activeOpacity={0.7}>
+              <Text style={[sheetStyles.cancelText, { color: Colors.error }]}>Supprimer l'objectif</Text>
+            </TouchableOpacity>
+          )}
+          <Button label="Fermer" variant="ghost" onPress={onClose} style={{ marginTop: Spacing.xs }} />
+        </View>
+      </View>
+    </Modal>
   )
 }
 
@@ -572,6 +804,16 @@ const styles = StyleSheet.create({
   },
   proText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.electric },
   joined: { fontSize: FontSize.sm, color: Colors.textTertiary },
+  heroBadges: { flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center', flexWrap: 'wrap' },
+  streakBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  streakText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: '#C2410C' },
   actions: { gap: Spacing.sm },
   signOutWrap: { paddingTop: Spacing.sm },
   version: { fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'center', paddingTop: Spacing.sm },
@@ -691,7 +933,106 @@ const actionStyles = StyleSheet.create({
   },
   icon: { fontSize: 18, width: 24, textAlign: 'center' },
   label: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
+  badge: {
+    backgroundColor: Colors.electricDim,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  badgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.electric },
   chevron: { fontSize: 20, color: Colors.textTertiary, lineHeight: 22 },
+})
+
+const sportBadgeStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadow.sm,
+  },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  emoji: { fontSize: 13 },
+  label: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
+})
+
+const goalStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    ...Shadow.sm,
+    flexWrap: 'wrap',
+  },
+  left: { flex: 1, gap: 3 },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  sub: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  right: { alignItems: 'center' },
+  goalNum: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.electric },
+  goalUnit: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  setLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.electric },
+  barWrap: { width: '100%' },
+  bar: { height: 6, backgroundColor: Colors.bgAlt, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
+})
+
+const achieveStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadow.sm,
+  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  count: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.electric },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  badge: {
+    width: 72,
+    alignItems: 'center',
+    gap: 3,
+    padding: Spacing.xs,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+  },
+  badgeLocked: { opacity: 0.45 },
+  badgeEmoji: { fontSize: 24 },
+  badgeEmojiLocked: {},
+  badgeLabel: { fontSize: 9, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
+  badgeLabelLocked: { color: Colors.textTertiary },
+  badgeDesc: { fontSize: 8, color: Colors.textTertiary, textAlign: 'center' },
+})
+
+const goalModalStyles = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
+  option: {
+    flex: 1,
+    minWidth: 80,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+    gap: 2,
+  },
+  optionActive: { backgroundColor: Colors.electric },
+  optionNum: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
+  optionNumActive: { color: Colors.textInverse },
+  optionLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  optionLabelActive: { color: Colors.textInverse },
 })
 
 const sheetStyles = StyleSheet.create({

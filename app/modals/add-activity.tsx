@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { useActivities } from '@/hooks/useActivities'
 import { useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
-import type { SportType, GymExercise, BadmintonSet, ActivityMetrics } from '@/types/database'
+import type { SportType, GymExercise, BadmintonSet, TennisSet, ActivityMetrics } from '@/types/database'
 
 // ── Sport config ──────────────────────────────────────────────
 
@@ -24,9 +24,14 @@ const SPORTS: { key: SportType; emoji: string; label: string }[] = [
   { key: 'running',   emoji: '🏃', label: 'Course' },
   { key: 'cycling',   emoji: '🚴', label: 'Vélo' },
   { key: 'swimming',  emoji: '🏊', label: 'Natation' },
+  { key: 'hiking',    emoji: '🥾', label: 'Randonnée' },
   { key: 'gym',       emoji: '🏋️', label: 'Muscu' },
+  { key: 'football',  emoji: '⚽', label: 'Football' },
+  { key: 'tennis',    emoji: '🎾', label: 'Tennis' },
   { key: 'badminton', emoji: '🏸', label: 'Badminton' },
+  { key: 'boxing',    emoji: '🥊', label: 'Boxe' },
   { key: 'athletics', emoji: '⚡', label: 'Athlétisme' },
+  { key: 'yoga',      emoji: '🧘', label: 'Yoga' },
 ]
 
 // ── Component ─────────────────────────────────────────────────
@@ -57,6 +62,27 @@ export default function AddActivityModal() {
   const [event, setEvent] = useState('')
   const [resultValue, setResultValue] = useState('')
 
+  // Football fields
+  const [footballGoals, setFootballGoals] = useState('')
+  const [footballAssists, setFootballAssists] = useState('')
+  const [footballPosition, setFootballPosition] = useState('')
+  const [footballWon, setFootballWon] = useState<boolean | null>(null)
+
+  // Tennis fields
+  const [tennisSets, setTennisSets] = useState<TennisSet[]>([{ player_games: 0, opponent_games: 0 }])
+  const [tennisWon, setTennisWon] = useState<boolean | null>(null)
+  const [tennisAces, setTennisAces] = useState('')
+
+  // Hiking fields
+  const [hikingElevation, setHikingElevation] = useState('')
+
+  // Yoga fields
+  const [yogaStyle, setYogaStyle] = useState('hatha')
+
+  // Boxing fields
+  const [boxingRounds, setBoxingRounds] = useState('')
+  const [boxingType, setBoxingType] = useState('bag')
+
   const handleSave = useCallback(async () => {
     setErrorMsg(null)
     if (!sport) return
@@ -79,12 +105,43 @@ export default function AddActivityModal() {
       metrics = { exercises, total_volume_kg: totalVolume }
     } else if (sport === 'badminton') {
       metrics = { sets, match_won: matchWon ?? false }
-    } else {
+    } else if (sport === 'athletics') {
       metrics = {
         event,
         result_value: parseFloat(resultValue) || 0,
         result_unit: 's',
       }
+    } else if (sport === 'hiking') {
+      metrics = {
+        distance_m: parseFloat(distanceKm) * 1000 || 0,
+        avg_heart_rate: parseInt(avgHeartRate) || undefined,
+        elevation_m: parseInt(hikingElevation) || undefined,
+      }
+    } else if (sport === 'football') {
+      metrics = {
+        match_won: footballWon ?? false,
+        goals_scored: parseInt(footballGoals) || 0,
+        assists: parseInt(footballAssists) || 0,
+        position: (footballPosition as any) || undefined,
+      } as any
+    } else if (sport === 'tennis') {
+      metrics = {
+        sets: tennisSets,
+        match_won: tennisWon ?? false,
+        aces: parseInt(tennisAces) || undefined,
+      } as any
+    } else if (sport === 'yoga') {
+      metrics = {
+        style: yogaStyle,
+        avg_heart_rate: parseInt(avgHeartRate) || undefined,
+      } as any
+    } else {
+      // boxing
+      metrics = {
+        rounds: parseInt(boxingRounds) || undefined,
+        bout_type: boxingType,
+        avg_heart_rate: parseInt(avgHeartRate) || undefined,
+      } as any
     }
 
     try {
@@ -102,7 +159,10 @@ export default function AddActivityModal() {
     } finally {
       setLoading(false)
     }
-  }, [sport, durationMin, calories, distanceKm, avgHeartRate, exercises, sets, matchWon, event, resultValue, addActivity])
+  }, [sport, durationMin, calories, distanceKm, avgHeartRate, exercises, sets, matchWon, event, resultValue,
+      footballGoals, footballAssists, footballPosition, footballWon,
+      tennisSets, tennisWon, tennisAces, hikingElevation, yogaStyle,
+      boxingRounds, boxingType, addActivity])
 
   return (
     <KeyboardAvoidingView
@@ -180,6 +240,64 @@ export default function AddActivityModal() {
                 onEventChange={setEvent}
                 result={resultValue}
                 onResultChange={setResultValue}
+                t={t}
+              />
+            )}
+
+            {sport === 'hiking' && (
+              <HikingFields
+                distanceKm={distanceKm}
+                onDistanceChange={setDistanceKm}
+                elevation={hikingElevation}
+                onElevationChange={setHikingElevation}
+                heartRate={avgHeartRate}
+                onHeartRateChange={setAvgHeartRate}
+              />
+            )}
+
+            {sport === 'football' && (
+              <FootballFields
+                goals={footballGoals}
+                onGoalsChange={setFootballGoals}
+                assists={footballAssists}
+                onAssistsChange={setFootballAssists}
+                position={footballPosition}
+                onPositionChange={setFootballPosition}
+                won={footballWon}
+                onWonChange={setFootballWon}
+                t={t}
+              />
+            )}
+
+            {sport === 'tennis' && (
+              <TennisFields
+                sets={tennisSets}
+                onSetsChange={setTennisSets}
+                won={tennisWon}
+                onWonChange={setTennisWon}
+                aces={tennisAces}
+                onAcesChange={setTennisAces}
+                t={t}
+              />
+            )}
+
+            {sport === 'yoga' && (
+              <YogaFields
+                yogaStyle={yogaStyle}
+                onStyleChange={setYogaStyle}
+                heartRate={avgHeartRate}
+                onHeartRateChange={setAvgHeartRate}
+              />
+            )}
+
+            {sport === 'boxing' && (
+              <BoxingFields
+                rounds={boxingRounds}
+                onRoundsChange={setBoxingRounds}
+                boutType={boxingType}
+                onTypeChange={setBoxingType}
+                heartRate={avgHeartRate}
+                onHeartRateChange={setAvgHeartRate}
                 t={t}
               />
             )}
@@ -368,6 +486,197 @@ function AthleticsFields({ event, onEventChange, result, onResultChange, t }: an
         keyboardType="decimal-pad"
         placeholder="9.85"
       />
+    </View>
+  )
+}
+
+function HikingFields({ distanceKm, onDistanceChange, elevation, onElevationChange, heartRate, onHeartRateChange }: any) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.row}>
+        <Field
+          label="Distance (km)"
+          value={distanceKm}
+          onChange={onDistanceChange}
+          keyboardType="decimal-pad"
+          placeholder="15.0"
+        />
+        <Field
+          label="Dénivelé (m)"
+          value={elevation}
+          onChange={onElevationChange}
+          keyboardType="numeric"
+          placeholder="800"
+        />
+      </View>
+      <Field
+        label="Fréquence cardiaque (bpm)"
+        value={heartRate}
+        onChange={onHeartRateChange}
+        keyboardType="numeric"
+        placeholder="130"
+      />
+    </View>
+  )
+}
+
+const FOOTBALL_POSITIONS = [
+  { key: 'goalkeeper', label: 'Gardien' },
+  { key: 'defender',   label: 'Défenseur' },
+  { key: 'midfielder', label: 'Milieu' },
+  { key: 'forward',    label: 'Attaquant' },
+]
+
+function FootballFields({ goals, onGoalsChange, assists, onAssistsChange, position, onPositionChange, won, onWonChange, t }: any) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.row}>
+        <Field label="Buts" value={goals} onChange={onGoalsChange} keyboardType="numeric" placeholder="0" />
+        <Field label="Passes déc." value={assists} onChange={onAssistsChange} keyboardType="numeric" placeholder="0" />
+      </View>
+      <Text style={styles.sectionLabel}>Position</Text>
+      <View style={styles.toggleRow}>
+        {FOOTBALL_POSITIONS.map(p => (
+          <TouchableOpacity
+            key={p.key}
+            style={[styles.toggleBtn, position === p.key && styles.toggleBtnActive]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPositionChange(p.key) }}
+          >
+            <Text style={[styles.toggleText, position === p.key && styles.toggleTextActive, { fontSize: FontSize.xs }]}>
+              {p.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.toggleRow}>
+        {([true, false] as const).map(val => (
+          <TouchableOpacity
+            key={String(val)}
+            style={[styles.toggleBtn, won === val && styles.toggleBtnActive]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onWonChange(val) }}
+          >
+            <Text style={[styles.toggleText, won === val && styles.toggleTextActive]}>
+              {val ? t.activity.won : t.activity.lost}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function TennisFields({ sets, onSetsChange, won, onWonChange, aces, onAcesChange, t }: any) {
+  const addSet = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    onSetsChange([...sets, { player_games: 0, opponent_games: 0 }])
+  }
+  const updateSet = (idx: number, field: 'player_games' | 'opponent_games', value: string) => {
+    const next = [...sets]
+    next[idx] = { ...next[idx], [field]: parseInt(value) || 0 }
+    onSetsChange(next)
+  }
+  return (
+    <View style={styles.section}>
+      {sets.map((s: TennisSet, i: number) => (
+        <View key={i} style={styles.setRow}>
+          <Text style={styles.setIndex}>Set {i + 1}</Text>
+          <SmallField
+            value={s.player_games > 0 ? String(s.player_games) : ''}
+            onChange={(v: string) => updateSet(i, 'player_games', v)}
+            placeholder="Moi"
+          />
+          <Text style={{ color: Colors.textTertiary }}>–</Text>
+          <SmallField
+            value={s.opponent_games > 0 ? String(s.opponent_games) : ''}
+            onChange={(v: string) => updateSet(i, 'opponent_games', v)}
+            placeholder="Adv."
+          />
+        </View>
+      ))}
+      <Button label="+ Set" variant="secondary" size="sm" onPress={addSet} style={{ alignSelf: 'flex-start' }} />
+      <Field label="Aces" value={aces} onChange={onAcesChange} keyboardType="numeric" placeholder="3" />
+      <View style={styles.toggleRow}>
+        {([true, false] as const).map(val => (
+          <TouchableOpacity
+            key={String(val)}
+            style={[styles.toggleBtn, won === val && styles.toggleBtnActive]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onWonChange(val) }}
+          >
+            <Text style={[styles.toggleText, won === val && styles.toggleTextActive]}>
+              {val ? t.activity.won : t.activity.lost}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const YOGA_STYLES = [
+  { key: 'hatha',    label: 'Hatha' },
+  { key: 'vinyasa',  label: 'Vinyasa' },
+  { key: 'yin',      label: 'Yin' },
+  { key: 'ashtanga', label: 'Ashtanga' },
+  { key: 'power',    label: 'Power' },
+  { key: 'other',    label: 'Autre' },
+]
+
+function YogaFields({ yogaStyle, onStyleChange, heartRate, onHeartRateChange }: any) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>Style</Text>
+      <View style={styles.sportGrid}>
+        {YOGA_STYLES.map(s => (
+          <TouchableOpacity
+            key={s.key}
+            style={[styles.toggleBtn, yogaStyle === s.key && styles.toggleBtnActive, { flex: 0, paddingHorizontal: 14 }]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onStyleChange(s.key) }}
+          >
+            <Text style={[styles.toggleText, yogaStyle === s.key && styles.toggleTextActive, { fontSize: FontSize.sm }]}>
+              {s.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Field
+        label="Fréquence cardiaque (bpm)"
+        value={heartRate}
+        onChange={onHeartRateChange}
+        keyboardType="numeric"
+        placeholder="95"
+      />
+    </View>
+  )
+}
+
+const BOXING_TYPES = [
+  { key: 'bag',         label: 'Sac' },
+  { key: 'pad_work',    label: 'Pattes' },
+  { key: 'sparring',    label: 'Sparring' },
+  { key: 'competition', label: 'Compét.' },
+]
+
+function BoxingFields({ rounds, onRoundsChange, boutType, onTypeChange, heartRate, onHeartRateChange, t }: any) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>Type de séance</Text>
+      <View style={styles.toggleRow}>
+        {BOXING_TYPES.map(bt => (
+          <TouchableOpacity
+            key={bt.key}
+            style={[styles.toggleBtn, boutType === bt.key && styles.toggleBtnActive]}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onTypeChange(bt.key) }}
+          >
+            <Text style={[styles.toggleText, boutType === bt.key && styles.toggleTextActive, { fontSize: FontSize.sm }]}>
+              {bt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.row}>
+        <Field label="Rounds" value={rounds} onChange={onRoundsChange} keyboardType="numeric" placeholder="6" />
+        <Field label="Fréquence (bpm)" value={heartRate} onChange={onHeartRateChange} keyboardType="numeric" placeholder="155" />
+      </View>
     </View>
   )
 }

@@ -15,10 +15,12 @@ import type { ActivityWithProfile, SportType, EnduranceMetrics, GymMetrics, Badm
 const SPORT_EMOJI: Record<SportType, string> = {
   running: '🏃', cycling: '🚴', swimming: '🏊',
   gym: '🏋️', badminton: '🏸', athletics: '⚡',
+  football: '⚽', tennis: '🎾', hiking: '🥾', yoga: '🧘', boxing: '🥊',
 }
 const SPORT_LABEL: Record<SportType, string> = {
   running: 'Course à pied', cycling: 'Vélo', swimming: 'Natation',
   gym: 'Musculation', badminton: 'Badminton', athletics: 'Athlétisme',
+  football: 'Football', tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
 }
 
 export function ActivityCard({ activity, unit = 'metric' }: {
@@ -140,6 +142,44 @@ function getMetrics(a: ActivityWithProfile, unit: 'metric' | 'imperial') {
     case 'athletics': {
       if (m.event) out.push({ value: m.event, label: 'Épreuve' })
       if (m.result_value) out.push({ value: `${m.result_value} ${m.result_unit ?? ''}`, label: 'Résultat' })
+      break
+    }
+    case 'hiking': {
+      if (m.distance_m) out.push({ value: formatDistance(m.distance_m, unit), label: 'Distance' })
+      if (m.elevation_m) out.push({ value: `${Math.round(m.elevation_m)} m`, label: 'Dénivelé' })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
+      break
+    }
+    case 'football': {
+      out.push({ value: m.match_won ? '✅ Victoire' : '💪 Défaite', label: 'Résultat' })
+      if (m.goals_scored !== undefined) out.push({ value: String(m.goals_scored), label: 'Buts' })
+      if (m.assists !== undefined) out.push({ value: String(m.assists), label: 'Passes déc.' })
+      break
+    }
+    case 'tennis': {
+      if (m.sets?.length) {
+        const score = m.sets.map((s: any) => `${s.player_games}-${s.opponent_games}`).join(' / ')
+        out.push({ value: score, label: 'Score' })
+      }
+      out.push({ value: m.match_won ? '✅ Victoire' : '💪 Défaite', label: 'Résultat' })
+      if (m.aces) out.push({ value: String(m.aces), label: 'Aces' })
+      break
+    }
+    case 'yoga': {
+      const STYLE_LABELS: Record<string, string> = {
+        hatha: 'Hatha', vinyasa: 'Vinyasa', yin: 'Yin', ashtanga: 'Ashtanga', power: 'Power', other: 'Autre',
+      }
+      if (m.style) out.push({ value: STYLE_LABELS[m.style] ?? m.style, label: 'Style' })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
+      break
+    }
+    case 'boxing': {
+      const TYPE_LABELS: Record<string, string> = {
+        bag: 'Sac', pad_work: 'Pattes', sparring: 'Sparring', competition: 'Compétition',
+      }
+      if (m.bout_type) out.push({ value: TYPE_LABELS[m.bout_type] ?? m.bout_type, label: 'Type' })
+      if (m.rounds) out.push({ value: String(m.rounds), label: 'Rounds' })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
       break
     }
   }
