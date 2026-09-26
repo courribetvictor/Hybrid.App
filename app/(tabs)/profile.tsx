@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
 } from 'react-native'
 import Animated, {
   useSharedValue,
@@ -18,6 +17,7 @@ import { router } from 'expo-router'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
+import { PaywallModal } from '@/components/arena/PaywallModal'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { useProfile, useSession } from '@/hooks/useProfile'
 import { useActivities } from '@/hooks/useActivities'
@@ -44,6 +44,7 @@ export default function ProfileScreen() {
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, 90)
 
   const [saving, setSaving] = useState(false)
+  const [paywallVisible, setPaywallVisible] = useState(false)
 
   const unit = profile?.preferred_unit ?? 'metric'
   const lang = profile?.preferred_language ?? 'fr'
@@ -75,18 +76,10 @@ export default function ProfileScreen() {
     await updateProfile({ preferred_language: next })
   }, [updateProfile])
 
-  const handleSignOut = useCallback(() => {
-    Alert.alert('Se déconnecter', 'Confirmer ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Se déconnecter',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut()
-          router.replace('/')
-        },
-      },
-    ])
+  const handleSignOut = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    await supabase.auth.signOut()
+    router.replace('/')
   }, [])
 
   const wLabel = unit === 'imperial' ? 'lbs' : 'kg'
@@ -208,7 +201,10 @@ export default function ProfileScreen() {
               </View>
               <TouchableOpacity
                 style={proStyles.btn}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                  setPaywallVisible(true)
+                }}
                 activeOpacity={0.8}
               >
                 <Text style={proStyles.btnText}>Voir</Text>
@@ -222,13 +218,21 @@ export default function ProfileScreen() {
             <Text style={actionStyles.chevron}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={actionStyles.row} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={actionStyles.row}
+            onPress={() => router.push('/modals/notifications')}
+            activeOpacity={0.7}
+          >
             <Text style={actionStyles.icon}>🔔</Text>
             <Text style={actionStyles.label}>Notifications</Text>
             <Text style={actionStyles.chevron}>›</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={actionStyles.row} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={actionStyles.row}
+            onPress={() => router.push('/modals/privacy')}
+            activeOpacity={0.7}
+          >
             <Text style={actionStyles.icon}>🔒</Text>
             <Text style={actionStyles.label}>Confidentialité</Text>
             <Text style={actionStyles.chevron}>›</Text>
@@ -247,6 +251,8 @@ export default function ProfileScreen() {
         <Text style={styles.version}>Hybrid.App · v0.1.0</Text>
 
       </ScrollView>
+
+      <PaywallModal visible={paywallVisible} onClose={() => setPaywallVisible(false)} />
     </View>
   )
 }

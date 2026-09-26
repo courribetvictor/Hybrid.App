@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -41,6 +40,7 @@ export default function AddActivityModal() {
   const [durationMin, setDurationMin] = useState('')
   const [calories, setCalories] = useState('')
   const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Endurance fields
   const [distanceKm, setDistanceKm] = useState('')
@@ -58,10 +58,11 @@ export default function AddActivityModal() {
   const [resultValue, setResultValue] = useState('')
 
   const handleSave = useCallback(async () => {
+    setErrorMsg(null)
     if (!sport) return
     const dur = parseInt(durationMin) * 60
     if (!dur || dur <= 0) {
-      Alert.alert('Durée invalide', 'Merci de saisir une durée en minutes.')
+      setErrorMsg('Merci de saisir une durée en minutes.')
       return
     }
 
@@ -97,7 +98,7 @@ export default function AddActivityModal() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       router.back()
     } catch (e: any) {
-      Alert.alert('Erreur', e.message)
+      setErrorMsg(e.message)
     } finally {
       setLoading(false)
     }
@@ -185,6 +186,13 @@ export default function AddActivityModal() {
           </>
         )}
       </ScrollView>
+
+      {/* Inline error */}
+      {errorMsg && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+        </View>
+      )}
 
       {/* Footer CTA */}
       <View style={styles.footer}>
@@ -517,6 +525,21 @@ const styles = StyleSheet.create({
   },
   footerBtn: {
     flex: 1,
+  },
+  errorBanner: {
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.error + '18',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.error + '40',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  errorText: {
+    fontSize: FontSize.sm,
+    color: Colors.error,
+    fontWeight: FontWeight.medium,
   },
 })
 
