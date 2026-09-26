@@ -208,33 +208,42 @@ export default function ProfileScreen() {
     if (!userId) return
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permission.granted) {
-      Alert.alert('Permission requise', 'Autorise l\'accès à la galerie dans les réglages.')
+      Alert.alert('Permission requise', "Autorise l'accès à la galerie dans les réglages.")
       return
     }
-    // allowsEditing:false avoids the cropper which causes black screen on iOS inside a Modal
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'] as any,
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [1, 1] as [number, number],
       quality: 0.75,
     })
     if (result.canceled || !result.assets[0]) return
     const asset = result.assets[0]
-    const rawExt = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const ext = rawExt === 'jpeg' ? 'jpg' : rawExt
-    const path = `${userId}/avatar.${ext}`
+
+    // Use mimeType for extension — asset.uri on web is a blob URL with no extension
+    const mime = asset.mimeType ?? 'image/jpeg'
+    const ext = (mime.split('/')[1] ?? 'jpeg').replace('jpeg', 'jpg')
+    const path = `${userId}/avatar.jpg` // always jpg — simpler, consistent
+
     setAvatarUploading(true)
     try {
-      const blob = await fetch(asset.uri).then(r => r.blob())
+      const response = await fetch(asset.uri)
+      if (!response.ok) throw new Error('Impossible de lire la photo')
+      const blob = await response.blob()
+
       const { error: upErr } = await supabase.storage
         .from('avatars')
-        .upload(path, blob, { contentType: `image/${ext}`, upsert: true })
-      if (upErr) throw upErr
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+      if (upErr) throw new Error(upErr.message)
+
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-      await updateProfile({ avatar_url: publicUrl + `?t=${Date.now()}` })
+      const finalUrl = publicUrl + `?t=${Date.now()}`
+      setAvatarUri(finalUrl) // mise à jour locale immédiate
+      await updateProfile({ avatar_url: finalUrl })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-    } catch (e) {
-      console.warn('Avatar upload failed:', e)
-      Alert.alert('Erreur', 'Impossible de télécharger la photo. Vérifie ta connexion.')
+    } catch (e: any) {
+      console.error('Avatar upload failed:', e)
+      Alert.alert('Erreur upload', e?.message ?? 'Impossible de télécharger la photo.')
     } finally {
       setAvatarUploading(false)
     }
@@ -254,12 +263,14 @@ export default function ProfileScreen() {
 
   const [unit, setUnit] = useState<PreferredUnit>('metric')
   const [lang, setLang] = useState<PreferredLanguage>('fr')
+  const [avatarUri, setAvatarUri] = useState<string | null>(null)
   // Sync once from DB when profile first loads
   const prefsLoaded = useRef(false)
   useEffect(() => {
     if (profile && !prefsLoaded.current) {
-      if (profile.preferred_unit)    setUnit(profile.preferred_unit)
+      if (profile.preferred_unit)     setUnit(profile.preferred_unit)
       if (profile.preferred_language) setLang(profile.preferred_language)
+      if (profile.avatar_url)         setAvatarUri(profile.avatar_url)
       prefsLoaded.current = true
     }
   }, [profile])
@@ -356,7 +367,7 @@ export default function ProfileScreen() {
         <View style={styles.hero}>
           <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85} style={styles.avatarWrap}>
             <Avatar
-              uri={profile?.avatar_url}
+              uri={avatarUri}
               username={profile?.username ?? '?'}
               isPro={profile?.is_pro}
               size={80}
@@ -666,6 +677,7 @@ export default function ProfileScreen() {
         visible={editVisible}
         onClose={() => setEditVisible(false)}
         profile={profile}
+        avatarUri={avatarUri}
         unit={unit}
         extra={extra}
         onSave={updateProfile}
@@ -916,11 +928,12 @@ function GoalModal({
 // ── Edit Profile Modal ────────────────────────────────────────
 
 function EditProfileModal({
-  visible, onClose, profile, unit, extra, onSave, onSaveExtra, onAvatarPress, avatarUploading,
+  visible, onClose, profile, avatarUri, unit, extra, onSave, onSaveExtra, onAvatarPress, avatarUploading,
 }: {
   visible: boolean
   onClose: () => void
   profile: Profile | null
+  avatarUri: string | null
   unit: PreferredUnit
   extra: { bio: string; fitnessLevel: string }
   onSave: (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => Promise<void>
@@ -985,7 +998,7 @@ function EditProfileModal({
           <View style={editStyles.avatarSection}>
             <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.8} style={editStyles.avatarBtn}>
               <Avatar
-                uri={profile?.avatar_url}
+                uri={avatarUri ?? profile?.avatar_url}
                 username={profile?.username ?? '?'}
                 isPro={false}
                 size={72}
