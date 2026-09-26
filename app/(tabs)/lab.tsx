@@ -10,8 +10,8 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
+  interpolateColor,
 } from 'react-native-reanimated'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/theme'
 import { WeightChart } from '@/components/lab/WeightChart'
@@ -21,8 +21,10 @@ import { SportsPieChart } from '@/components/lab/SportsPieChart'
 import { SportStatsTab } from '@/components/lab/SportStatsTab'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
 import { useActivities } from '@/hooks/useActivities'
+import { useProfile, useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
 import { formatDurationLong } from '@/lib/units'
+import type { PreferredUnit } from '@/types/database'
 
 // ── Sub-tab types ─────────────────────────────────────────────
 type SubTab = 'morphology' | 'global' | 'sport'
@@ -41,18 +43,17 @@ const PERIODS: { value: Period; labelKey: 'last7Days' | 'last30Days' | 'last90Da
   { value: 365, labelKey: 'allTime' },
 ]
 
-// Replace with auth context in production
-const CURRENT_USER_ID = 'placeholder-user-id'
-const CURRENT_UNIT = 'metric' as const
-
 export default function LabScreen() {
   const t = useT()
+  const { userId } = useSession()
+  const { profile } = useProfile(userId ?? undefined)
   const [activeTab, setActiveTab] = useState<SubTab>('morphology')
   const [period, setPeriod] = useState<Period>(30)
 
-  const { logs: bodyLogs, loading: logsLoading } = useBodyLogs(CURRENT_USER_ID, period)
+  const unit = profile?.preferred_unit ?? 'metric'
+  const { logs: bodyLogs, loading: logsLoading } = useBodyLogs(userId ?? undefined, period)
   const { activities, heatmapData, sportBreakdown, totalCalories, totalDurationSeconds } =
-    useActivities(CURRENT_USER_ID, period)
+    useActivities(userId ?? undefined, period)
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -77,7 +78,7 @@ export default function LabScreen() {
           <MorphologyTab
             bodyLogs={bodyLogs}
             activities={activities}
-            unit={CURRENT_UNIT}
+            unit={unit}
             loading={logsLoading}
           />
         )}
@@ -93,7 +94,7 @@ export default function LabScreen() {
         )}
 
         {activeTab === 'sport' && (
-          <SportStatsTab activities={activities} unit={CURRENT_UNIT} />
+          <SportStatsTab activities={activities} unit={unit} />
         )}
       </ScrollView>
     </SafeAreaView>
@@ -134,14 +135,14 @@ function SubTabPill({
   active: boolean
   onPress: () => void
 }) {
-  const bg = useSharedValue(active ? 1 : 0)
+  const progress = useSharedValue(active ? 1 : 0)
   const style = useAnimatedStyle(() => ({
-    backgroundColor: bg.value === 1 ? Colors.electric : Colors.bgAlt,
+    backgroundColor: interpolateColor(progress.value, [0, 1], [Colors.bgAlt, Colors.electric]),
   }))
 
   React.useEffect(() => {
-    bg.value = withTiming(active ? 1 : 0, { duration: 200 })
-  }, [active, bg])
+    progress.value = withTiming(active ? 1 : 0, { duration: 200 })
+  }, [active, progress])
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
@@ -196,7 +197,7 @@ function MorphologyTab({
 }: {
   bodyLogs: ReturnType<typeof useBodyLogs>['logs']
   activities: ReturnType<typeof useActivities>['activities']
-  unit: typeof CURRENT_UNIT
+  unit: PreferredUnit
   loading: boolean
 }) {
   return (

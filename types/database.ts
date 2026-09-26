@@ -130,58 +130,77 @@ export interface WeeklyChallenge {
 
 // ── Supabase database schema type (for createClient<Database>()) ──
 
+// Utility: make a type compatible with Supabase's Record<string, unknown> constraint
+type DbRow<T> = T & { [K: string]: unknown }
+
 export type Database = {
   public: {
     Tables: {
       profiles: {
-        Row: Profile
-        Insert: Omit<Profile, 'id' | 'hybrid_score' | 'created_at'> & {
+        Row: DbRow<Profile>
+        Insert: DbRow<Omit<Profile, 'id' | 'hybrid_score' | 'created_at'> & {
           id?: string
           hybrid_score?: number
           created_at?: string
-        }
-        Update: Partial<Omit<Profile, 'id' | 'created_at'>>
+        }>
+        Update: DbRow<Partial<Omit<Profile, 'id' | 'created_at'>>>
+        Relationships: []
       }
       body_logs: {
-        Row: BodyLog
-        Insert: Omit<BodyLog, 'id' | 'created_at'> & { id?: string; created_at?: string }
-        Update: Partial<Omit<BodyLog, 'id' | 'user_id' | 'created_at'>>
+        Row: DbRow<BodyLog>
+        Insert: DbRow<Omit<BodyLog, 'id' | 'created_at'> & { id?: string; created_at?: string }>
+        Update: DbRow<Partial<Omit<BodyLog, 'id' | 'user_id' | 'created_at'>>>
+        Relationships: []
       }
       activities: {
-        Row: Activity
-        Insert: Omit<Activity, 'id' | 'created_at'> & { id?: string; created_at?: string }
-        Update: Partial<Omit<Activity, 'id' | 'user_id' | 'created_at'>>
+        Row: DbRow<Activity>
+        Insert: DbRow<Omit<Activity, 'id' | 'created_at'> & { id?: string; created_at?: string }>
+        Update: DbRow<Partial<Omit<Activity, 'id' | 'user_id' | 'created_at'>>>
+        Relationships: []
       }
       friendships: {
-        Row: Friendship
-        Insert: Omit<Friendship, 'id' | 'created_at'> & { id?: string; created_at?: string }
-        Update: Pick<Friendship, 'status'>
+        Row: DbRow<Friendship>
+        Insert: DbRow<Omit<Friendship, 'id' | 'created_at'> & { id?: string; created_at?: string }>
+        Update: DbRow<Pick<Friendship, 'status'>>
+        Relationships: []
       }
       clubs: {
-        Row: Club
-        Insert: Omit<Club, 'id' | 'total_points' | 'created_at'> & {
+        Row: DbRow<Club>
+        Insert: DbRow<Omit<Club, 'id' | 'total_points' | 'created_at'> & {
           id?: string
           total_points?: number
           created_at?: string
-        }
-        Update: Partial<Pick<Club, 'name' | 'total_points'>>
+        }>
+        Update: DbRow<Partial<Pick<Club, 'name' | 'total_points'>>>
+        Relationships: []
       }
       club_members: {
-        Row: ClubMember
-        Insert: Omit<ClubMember, 'joined_at'> & { joined_at?: string }
-        Update: never
+        Row: DbRow<ClubMember>
+        Insert: DbRow<Omit<ClubMember, 'joined_at'> & { joined_at?: string }>
+        Update: DbRow<Record<string, never>>
+        Relationships: []
       }
       weekly_challenges: {
-        Row: WeeklyChallenge
-        Insert: Omit<WeeklyChallenge, 'id' | 'created_at'> & { id?: string; created_at?: string }
-        Update: Partial<Omit<WeeklyChallenge, 'id' | 'created_at'>>
+        Row: DbRow<WeeklyChallenge>
+        Insert: DbRow<Omit<WeeklyChallenge, 'id' | 'created_at'> & { id?: string; created_at?: string }>
+        Update: DbRow<Partial<Omit<WeeklyChallenge, 'id' | 'created_at'>>>
+        Relationships: []
       }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
     }
     Enums: {
       preferred_unit: PreferredUnit
       preferred_language: PreferredLanguage
       sport_type: SportType
       friendship_status: FriendshipStatus
+    }
+    CompositeTypes: {
+      [_ in never]: never
     }
   }
 }

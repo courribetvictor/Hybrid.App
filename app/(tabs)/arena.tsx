@@ -23,15 +23,8 @@ import { Colors, FontSize, FontWeight, Radius, Spacing } from '@/constants/theme
 import { useGlobalLeaderboard, useClubLeaderboard } from '@/hooks/useLeaderboard'
 import { useWeeklyChallenges } from '@/hooks/useWeeklyChallenges'
 import { useFriendships } from '@/hooks/useFriendships'
+import { useProfile, useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
-
-// Replace with auth context
-const CURRENT_USER = {
-  id: 'placeholder-user-id',
-  username: 'vous',
-  avatar_url: null as string | null,
-  is_pro: false,
-}
 
 type ArenaTab = 'leaderboard' | 'challenges' | 'friends'
 
@@ -45,6 +38,8 @@ type LeaderboardSub = 'global' | 'clubs'
 
 export default function ArenaScreen() {
   const t = useT()
+  const { userId } = useSession()
+  const { profile } = useProfile(userId ?? undefined)
   const [activeTab, setActiveTab] = useState<ArenaTab>('leaderboard')
   const [leaderboardSub, setLeaderboardSub] = useState<LeaderboardSub>('global')
   const [paywallVisible, setPaywallVisible] = useState(false)
@@ -52,7 +47,7 @@ export default function ArenaScreen() {
   const { entries, loading: lbLoading, refetch: refetchLb } = useGlobalLeaderboard()
   const { clubs, loading: clubLoading, refetch: refetchClubs } = useClubLeaderboard()
   const { challenges, loading: challengesLoading, refetch: refetchChallenges } = useWeeklyChallenges()
-  const { friends, friendIds, refetch: refetchFriends } = useFriendships(CURRENT_USER.id)
+  const { friends, friendIds, refetch: refetchFriends } = useFriendships(userId ?? undefined)
 
   const refreshing = lbLoading || clubLoading || challengesLoading
 
@@ -79,7 +74,7 @@ export default function ArenaScreen() {
           onSubChange={setLeaderboardSub}
           entries={entries}
           clubs={clubs}
-          currentUserId={CURRENT_USER.id}
+          currentUserId={userId ?? ''}
           refreshing={refreshing}
           onRefresh={handleRefresh}
         />
@@ -88,7 +83,7 @@ export default function ArenaScreen() {
       {activeTab === 'challenges' && (
         <ChallengesTab
           challenges={challenges}
-          isPro={CURRENT_USER.is_pro}
+          isPro={profile?.is_pro ?? false}
           onProLock={() => setPaywallVisible(true)}
           refreshing={challengesLoading}
           onRefresh={refetchChallenges}
@@ -99,7 +94,7 @@ export default function ArenaScreen() {
         <FriendsTab
           friends={friends}
           friendIds={friendIds}
-          currentUserId={CURRENT_USER.id}
+          currentUserId={userId ?? ''}
           onRequestSent={refetchFriends}
         />
       )}

@@ -114,7 +114,7 @@ export function useFriendFeed(friendIds: string[]) {
       .order('created_at', { ascending: false })
       .limit(50)
 
-    setFeed((data as ActivityWithProfile[]) ?? [])
+    setFeed((data as unknown as ActivityWithProfile[]) ?? [])
     setLoading(false)
   }, [friendIds])
 

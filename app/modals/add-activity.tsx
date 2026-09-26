@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { Button } from '@/components/ui/Button'
 import { useActivities } from '@/hooks/useActivities'
+import { useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
 import type { SportType, GymExercise, BadmintonSet, ActivityMetrics } from '@/types/database'
 
@@ -29,14 +30,12 @@ const SPORTS: { key: SportType; emoji: string; label: string }[] = [
   { key: 'athletics', emoji: '⚡', label: 'Athlétisme' },
 ]
 
-// Replace with auth context
-const CURRENT_USER_ID = 'placeholder-user-id'
-
 // ── Component ─────────────────────────────────────────────────
 
 export default function AddActivityModal() {
   const t = useT()
-  const { addActivity } = useActivities(CURRENT_USER_ID)
+  const { userId } = useSession()
+  const { addActivity } = useActivities(userId ?? undefined)
 
   const [sport, setSport] = useState<SportType | null>(null)
   const [durationMin, setDurationMin] = useState('')
@@ -383,7 +382,7 @@ function Field({ label, value, onChange, keyboardType = 'default', placeholder }
   )
 }
 
-function SmallField({ value, onChange, placeholder }: any) {
+function SmallField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <TextInput
       style={fieldStyles.small}

@@ -144,7 +144,7 @@ function WeeklyVolumeChart({ activities }: any) {
         width={CHART_W}
         height={120}
         yAxisLabel="" yAxisSuffix=""
-        chartConfig={chartCfg(Colors.electric)}
+        chartConfig={chartCfg()}
         withInnerLines={false} showBarTops={false}
         style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
         fromZero
@@ -202,7 +202,7 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
               data={{ labels: weightLabels, datasets: [{ data: weightValues }] }}
               width={CHART_W}
               height={130}
-              chartConfig={chartCfg(Colors.electric)}
+              chartConfig={chartCfg()}
               bezier withDots={false} withInnerLines={false} withOuterLines={false} withShadow={false}
               style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
               yAxisSuffix={` ${wLabel}`}
@@ -234,7 +234,7 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
             width={CHART_W}
             height={110}
             yAxisLabel="" yAxisSuffix=" kcal"
-            chartConfig={chartCfg(Colors.electric)}
+            chartConfig={chartCfg()}
             withInnerLines={false} showBarTops={false}
             style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
             fromZero
@@ -271,7 +271,7 @@ const SPORT_LABEL: Record<SportType, string> = {
   gym: 'Muscu', badminton: 'Badminton', athletics: 'Athlétisme',
 }
 
-function chartCfg(accent: string) {
+function chartCfg() {
   return {
     backgroundGradientFrom: Colors.bgCard,
     backgroundGradientTo: Colors.bgCard,
