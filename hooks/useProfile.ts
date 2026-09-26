@@ -37,21 +37,23 @@ export function useProfile(userId: string | undefined) {
   const updateProfile = useCallback(
     async (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => {
       if (!userId) return
-      // Use simple update without select — then refetch for reliable state sync
+      // Optimistic update first so the UI responds instantly
+      setProfile(prev => prev ? { ...prev, ...updates } : prev)
       const { error: err } = await supabase
         .from('profiles')
         .update(updates)
         .eq('id', userId)
-      if (err) throw new Error(err.message)
-      // Optimistic update then refetch for consistency
-      setProfile(prev => prev ? { ...prev, ...updates } : prev)
-      // Async refetch (don't await — keeps the UI fast)
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-        .then(({ data }) => { if (data) setProfile(data) })
+      if (err) {
+        // Revert optimistic update — refetch real state from DB
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+          .then(({ data }) => { if (data) setProfile(data) })
+        throw new Error(err.message)
+      }
+      // Success — trust the optimistic update, no refetch needed
     },
     [userId],
   )
