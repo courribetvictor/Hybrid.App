@@ -16,8 +16,20 @@ export function useProfile(userId: string | undefined) {
       .select('*')
       .eq('id', userId)
       .single()
-    if (err) setError(err.message)
-    else setProfile(data)
+    if (err?.code === 'PGRST116') {
+      // Profil manquant → le recrée via la fonction DB, puis re-fetch
+      await (supabase as any).rpc('ensure_profile')
+      const { data: recovered } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      setProfile(recovered)
+    } else if (err) {
+      setError(err.message)
+    } else {
+      setProfile(data)
+    }
     setLoading(false)
   }, [userId])
 

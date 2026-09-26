@@ -166,10 +166,11 @@ ALTER TABLE clubs             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE club_members      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE weekly_challenges ENABLE ROW LEVEL SECURITY;
 
--- Profiles: public read, own write
+-- Profiles: public read, own write, no delete from client
 CREATE POLICY "profiles_public_read"  ON profiles FOR SELECT USING (true);
 CREATE POLICY "profiles_own_update"   ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "profiles_own_insert"   ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_no_delete"    ON profiles FOR DELETE USING (false);
 
 -- Body logs: own only
 CREATE POLICY "body_logs_own"  ON body_logs FOR ALL USING (auth.uid() = user_id);
@@ -200,6 +201,22 @@ CREATE POLICY "weekly_challenges_public_read" ON weekly_challenges FOR SELECT US
 -- ============================================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================================
+
+-- Repair: recrée un profil manquant pour l'utilisateur connecté
+CREATE OR REPLACE FUNCTION ensure_profile()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_uid) THEN RETURN; END IF;
+  INSERT INTO public.profiles (id, username)
+  VALUES (v_uid, 'user_' || substr(v_uid::text, 1, 8))
+  ON CONFLICT DO NOTHING;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION ensure_profile() TO authenticated;
 
 -- Auto-create profile on user sign-up
 CREATE OR REPLACE FUNCTION handle_new_user()
