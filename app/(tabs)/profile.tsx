@@ -607,6 +607,8 @@ export default function ProfileScreen() {
         extra={extra}
         onSave={updateProfile}
         onSaveExtra={setExtra}
+        onAvatarPress={handleAvatarPress}
+        avatarUploading={avatarUploading}
       />
       <NotificationsModal visible={notifVisible} onClose={() => setNotifVisible(false)} />
       <PrivacyModal visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
@@ -802,7 +804,7 @@ function GoalModal({
 // ── Edit Profile Modal ────────────────────────────────────────
 
 function EditProfileModal({
-  visible, onClose, profile, unit, extra, onSave, onSaveExtra,
+  visible, onClose, profile, unit, extra, onSave, onSaveExtra, onAvatarPress, avatarUploading,
 }: {
   visible: boolean
   onClose: () => void
@@ -811,6 +813,8 @@ function EditProfileModal({
   extra: { bio: string; fitnessLevel: string }
   onSave: (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => Promise<void>
   onSaveExtra: (update: { bio?: string; fitnessLevel?: string }) => Promise<void>
+  onAvatarPress: () => void
+  avatarUploading: boolean
 }) {
   const [username, setUsername] = useState('')
   const [heightInput, setHeightInput] = useState('')
@@ -864,6 +868,27 @@ function EditProfileModal({
         <ScrollView style={sheetStyles.sheetScroll} contentContainerStyle={sheetStyles.sheetScrollContent}>
           <View style={sheetStyles.handle} />
           <Text style={sheetStyles.sheetTitle}>Modifier le profil</Text>
+
+          {/* Avatar picker */}
+          <View style={editStyles.avatarSection}>
+            <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.8} style={editStyles.avatarBtn}>
+              <Avatar
+                uri={profile?.avatar_url}
+                username={profile?.username ?? '?'}
+                isPro={false}
+                size={72}
+              />
+              <View style={editStyles.avatarOverlay}>
+                {avatarUploading
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={editStyles.avatarOverlayIcon}>📷</Text>
+                }
+              </View>
+            </TouchableOpacity>
+            <Text style={editStyles.avatarHint}>
+              {avatarUploading ? 'Téléchargement...' : 'Changer la photo'}
+            </Text>
+          </View>
 
           {errorMsg && (
             <View style={sheetStyles.error}>
@@ -1362,6 +1387,23 @@ const achieveStyles = StyleSheet.create({
 })
 
 const editStyles = StyleSheet.create({
+  avatarSection: { alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.xs },
+  avatarBtn: { position: 'relative' },
+  avatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.electric,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.bgCard,
+  },
+  avatarOverlayIcon: { fontSize: 12 },
+  avatarHint: { fontSize: FontSize.xs, color: Colors.textTertiary },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
   levelChip: {
     flexDirection: 'row',

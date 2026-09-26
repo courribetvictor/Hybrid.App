@@ -45,6 +45,8 @@ export default function StatsScreen() {
 
   const tabIndex = TAB_KEYS.indexOf(tab)
   const indicatorX = useSharedValue(0)
+  // Shared value so the worklet reads the live index without stale closure
+  const tabIndexSV = useSharedValue(0)
   const tabBarWidth = useRef(W - Spacing.md * 2 - 6)
 
   const unit = profile?.preferred_unit ?? 'metric'
@@ -53,20 +55,22 @@ export default function StatsScreen() {
     useActivities(userId ?? undefined, period)
 
   const switchTab = useCallback((newTab: Tab) => {
-    setTab(newTab)
     const idx = TAB_KEYS.indexOf(newTab)
+    tabIndexSV.value = idx
+    setTab(newTab)
     const chipW = tabBarWidth.current / 3
     indicatorX.value = withSpring(idx * chipW, { damping: 18, stiffness: 200 })
-  }, [indicatorX])
+  }, [indicatorX, tabIndexSV])
 
   const swipe = Gesture.Pan()
-    .minDistance(20)
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-8, 8])
     .onEnd(e => {
       'worklet'
-      const idx = TAB_KEYS.indexOf(tab)
-      if (e.velocityX < -200 && idx < 2) {
+      const idx = tabIndexSV.value
+      if (e.velocityX < -150 && idx < TAB_KEYS.length - 1) {
         runOnJS(switchTab)(TAB_KEYS[idx + 1])
-      } else if (e.velocityX > 200 && idx > 0) {
+      } else if (e.velocityX > 150 && idx > 0) {
         runOnJS(switchTab)(TAB_KEYS[idx - 1])
       }
     })
