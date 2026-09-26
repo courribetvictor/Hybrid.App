@@ -23,10 +23,11 @@ function vertex(i: number, r: number, cx: number, cy: number) {
 }
 
 export function SkillsRadar({ skills, size = 220 }: Props) {
-  const cx = size / 2
-  const cy = size / 2
+  const svgSize = size * 1.35
+  const cx = svgSize / 2
+  const cy = svgSize / 2
   const maxR = size * 0.38
-  const labelR = size * 0.48
+  const labelR = size * 0.52
 
   // Grid rings
   const rings = [0.25, 0.5, 0.75, 1.0]
@@ -46,7 +47,7 @@ export function SkillsRadar({ skills, size = 220 }: Props) {
 
       {/* Radar */}
       <View style={{ alignItems: 'center' }}>
-        <Svg width={size} height={size}>
+        <Svg width={svgSize} height={svgSize}>
           {/* Background rings */}
           {rings.map(r => (
             <Polygon
