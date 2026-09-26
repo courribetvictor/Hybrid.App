@@ -13,12 +13,28 @@ interface LeaderboardRowProps {
 }
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
+const RANK_BG: Record<number, string> = {
+  1: 'rgba(245,158,11,0.12)',
+  2: 'rgba(156,163,175,0.10)',
+  3: 'rgba(180,120,60,0.10)',
+}
+const RANK_BORDER: Record<number, string> = {
+  1: 'rgba(245,158,11,0.30)',
+  2: 'rgba(156,163,175,0.25)',
+  3: 'rgba(180,120,60,0.25)',
+}
+const SCORE_COLOR: Record<number, string> = {
+  1: '#F59E0B',
+  2: '#9CA3AF',
+  3: '#B47A3C',
+}
 
 export function LeaderboardRow({
   entry, rank, isCurrentUser = false, weeklySeconds, weeklySessions,
 }: LeaderboardRowProps) {
   const medal = MEDAL[rank]
   const showWeekly = weeklySeconds !== undefined
+  const isPodium = rank <= 3
 
   const weeklyLabel = showWeekly
     ? (() => {
@@ -29,8 +45,18 @@ export function LeaderboardRow({
       })()
     : null
 
+  const scoreColor = isPodium
+    ? SCORE_COLOR[rank]
+    : isCurrentUser
+    ? Colors.electric
+    : Colors.textSecondary
+
   return (
-    <View style={[styles.row, isCurrentUser && styles.rowHighlight]}>
+    <View style={[
+      styles.row,
+      isPodium && { backgroundColor: RANK_BG[rank], borderColor: RANK_BORDER[rank], borderWidth: 1 },
+      isCurrentUser && !isPodium && styles.rowHighlight,
+    ]}>
       <View style={styles.rankBox}>
         {medal ? (
           <Text style={styles.medal}>{medal}</Text>
@@ -42,7 +68,7 @@ export function LeaderboardRow({
       <Avatar uri={entry.avatar_url} username={entry.username} isPro={entry.is_pro} size={38} />
 
       <View style={styles.nameCol}>
-        <Text style={[styles.username, isCurrentUser && styles.usernameActive]} numberOfLines={1}>
+        <Text style={[styles.username, isCurrentUser && styles.usernameActive, isPodium && styles.usernamePodium]} numberOfLines={1}>
           {entry.username}{isCurrentUser ? ' (vous)' : ''}
         </Text>
         {weeklyLabel ? (
@@ -50,7 +76,7 @@ export function LeaderboardRow({
         ) : null}
       </View>
 
-      <Text style={[styles.score, isCurrentUser && styles.scoreActive]}>
+      <Text style={[styles.score, { color: scoreColor }]}>
         {showWeekly
           ? `${Math.floor((weeklySeconds ?? 0) / 60)}min`
           : Math.round(entry.hybrid_score).toLocaleString()}
@@ -66,17 +92,23 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
+    borderRadius: Radius.md,
+    marginHorizontal: Spacing.md,
+    marginVertical: 2,
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   rowHighlight: {
     backgroundColor: Colors.electricDim,
-    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.electric + '40',
   },
   rankBox: {
     width: 28,
     alignItems: 'center',
   },
   medal: {
-    fontSize: 20,
+    fontSize: 22,
   },
   rankNum: {
     fontSize: FontSize.sm,
@@ -92,6 +124,9 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.medium,
     color: Colors.textPrimary,
   },
+  usernamePodium: {
+    fontWeight: FontWeight.bold,
+  },
   weeklyLabel: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
@@ -103,9 +138,5 @@ const styles = StyleSheet.create({
   score: {
     fontSize: FontSize.md,
     fontWeight: FontWeight.bold,
-    color: Colors.textSecondary,
-  },
-  scoreActive: {
-    color: Colors.electric,
   },
 })

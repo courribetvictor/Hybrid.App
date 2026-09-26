@@ -91,11 +91,19 @@ export default function ArenaScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>{t.arena.title}</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>{t.arena.title}</Text>
+            <Text style={styles.headerSub}>Classements & Défis</Text>
+          </View>
+          <View style={styles.trophyBadge}>
+            <Text style={styles.trophyEmoji}>🏆</Text>
+          </View>
+        </View>
       </View>
 
       {/* Top tabs */}
@@ -177,7 +185,7 @@ function TopTabBar({
 function TopTabPill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const opacity = useSharedValue(active ? 1 : 0)
   const animStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(0,85,255,${opacity.value * 0.12})`,
+    backgroundColor: `rgba(74,139,255,${opacity.value * 0.15})`,
   }))
   React.useEffect(() => {
     opacity.value = withTiming(active ? 1 : 0, { duration: 180 })
@@ -624,12 +632,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    marginBottom: Spacing.xs,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.extrabold,
     color: Colors.textPrimary,
+    letterSpacing: -0.5,
   },
+  headerSub: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    fontWeight: FontWeight.medium,
+    marginTop: 1,
+  },
+  trophyBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.3)',
+  },
+  trophyEmoji: { fontSize: 20 },
   listContent: {
     padding: Spacing.md,
     paddingBottom: 40,

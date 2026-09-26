@@ -447,7 +447,7 @@ function WeekSummaryBanner({
             </Text>
             <Text style={[
               bannerStyles.streakCount,
-              streak >= 30 && { color: '#B45309' },
+              streak >= 30 && { color: '#F59E0B' },
             ]}>
               {streak}
             </Text>
@@ -576,34 +576,34 @@ const bannerStyles = StyleSheet.create({
   },
   streakBadge: {
     alignItems: 'center',
-    backgroundColor: '#FFF7ED',
+    backgroundColor: 'rgba(251,146,60,0.12)',
     borderRadius: Radius.md,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1.5,
-    borderColor: '#FB923C',
+    borderColor: 'rgba(251,146,60,0.40)',
     minWidth: 52,
     gap: 1,
   },
   streakBadgeSilver: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    borderColor: 'rgba(245,158,11,0.40)',
   },
   streakBadgeGold: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#D97706',
+    backgroundColor: 'rgba(217,119,6,0.14)',
+    borderColor: 'rgba(217,119,6,0.45)',
   },
   streakEmoji: { fontSize: 16, lineHeight: 20 },
   streakCount: {
     fontSize: 22,
     fontWeight: FontWeight.extrabold,
-    color: '#EA580C',
+    color: '#FB923C',
     lineHeight: 26,
   },
   streakDays: {
     fontSize: 9,
     fontWeight: FontWeight.semibold,
-    color: '#C2410C',
+    color: '#F97316',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

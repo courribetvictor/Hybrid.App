@@ -79,7 +79,7 @@ export function SkillsRadar({ skills, size = 220 }: Props) {
           {/* Filled skill polygon */}
           <Polygon
             points={skillPoints}
-            fill="rgba(0,85,255,0.15)"
+            fill={Colors.electricDim}
             stroke={Colors.electric}
             strokeWidth={2}
             strokeLinejoin="round"

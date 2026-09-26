@@ -57,8 +57,8 @@ function TabPill({
   const bg = useSharedValue(active ? 1 : 0)
   React.useEffect(() => { bg.value = withTiming(active ? 1 : 0, { duration: 160 }) }, [active, bg])
   const anim = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(0,85,255,${bg.value * 0.1})`,
-    borderColor: `rgba(0,85,255,${bg.value * 0.4})`,
+    backgroundColor: `rgba(74,139,255,${bg.value * 0.12})`,
+    borderColor: `rgba(74,139,255,${bg.value * 0.45})`,
   }))
 
   return (
