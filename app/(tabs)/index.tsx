@@ -17,7 +17,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import { ScreenHeader } from '@/components/ui/ScreenHeader'
+import { ScreenHeader, HeaderIconBtn } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { ActivityCard } from '@/components/feed/ActivityCard'
 import { PostCard } from '@/components/feed/PostCard'
@@ -154,13 +154,11 @@ export default function FeedScreen() {
   const header = (
     <>
       <WeekSummaryBanner activities={ownActivities} goal={goal} />
-      {/* Quick post button */}
-      <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.8}>
-        <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={32} />
-        <Text style={feedStyles.postBarHint}>Partager quelque chose…</Text>
-        <View style={feedStyles.postBarBtn}>
-          <Text style={feedStyles.postBarBtnTxt}>Publier</Text>
-        </View>
+      {/* Post bar — compact, minimal */}
+      <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.85}>
+        <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={28} />
+        <Text style={feedStyles.postBarHint}>Quoi de neuf ?</Text>
+        <Text style={feedStyles.postBarIcon}>✏️</Text>
       </TouchableOpacity>
     </>
   )
@@ -168,16 +166,24 @@ export default function FeedScreen() {
   return (
     <View style={styles.safe}>
       <ScreenHeader
-        logo
+        title="Feed"
         right={
-          <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} activeOpacity={0.8}>
-            <Avatar
-              uri={profile?.avatar_url}
-              username={profile?.username ?? '?'}
-              isPro={profile?.is_pro}
-              size={34}
-            />
-          </TouchableOpacity>
+          <>
+            <HeaderIconBtn icon="🔍" onPress={() => {}} />
+            <HeaderIconBtn icon="🔔" badge />
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile')}
+              activeOpacity={0.8}
+              style={{ marginLeft: 2 }}
+            >
+              <Avatar
+                uri={profile?.avatar_url}
+                username={profile?.username ?? '?'}
+                isPro={profile?.is_pro}
+                size={34}
+              />
+            </TouchableOpacity>
+          </>
         }
       />
 
@@ -304,17 +310,24 @@ function WeekSummaryBanner({
 
   return (
     <View style={bannerStyles.card}>
-      {/* Header row */}
+      {/* Top row: title + streak + stats chips */}
       <View style={bannerStyles.top}>
         <Text style={bannerStyles.label}>Cette semaine</Text>
-        {streak > 0 && (
-          <View style={bannerStyles.streakChip}>
-            <Text style={bannerStyles.streakText}>🔥 {streak} j</Text>
-          </View>
-        )}
+        <View style={bannerStyles.topRight}>
+          {sessions > 0 && (
+            <Text style={bannerStyles.statInline}>
+              {sessions} séance{sessions > 1 ? 's' : ''} · {durationStr}
+            </Text>
+          )}
+          {streak > 0 && (
+            <View style={bannerStyles.streakChip}>
+              <Text style={bannerStyles.streakText}>🔥 {streak}</Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Days row */}
+      {/* Days strip — compact */}
       <View style={bannerStyles.days}>
         {weekDates.map((date, i) => {
           const hasActivity = activeDays.has(date)
@@ -322,63 +335,34 @@ function WeekSummaryBanner({
           const accentColor = sport ? SportColors[sport] : Colors.electric
           const isToday = i === todayIdx
           const isFuture = i > todayIdx
-
           return (
-            <View
-              key={i}
-              style={[
-                bannerStyles.day,
-                isToday && { backgroundColor: Colors.electricDim },
-                hasActivity && { backgroundColor: accentColor + '22' },
-                isToday && hasActivity && { backgroundColor: accentColor + '33' },
-              ]}
-            >
+            <View key={i} style={bannerStyles.dayWrap}>
               <Text style={[
                 bannerStyles.dayLabel,
                 isToday && { color: Colors.electric, fontWeight: FontWeight.bold },
-                isFuture && { color: Colors.borderLight },
-                hasActivity && { color: accentColor, fontWeight: FontWeight.bold },
+                isFuture && { opacity: 0.3 },
               ]}>
                 {DAY_LABELS[i]}
               </Text>
-              {hasActivity && (
-                <View style={[bannerStyles.dot, { backgroundColor: accentColor }]} />
-              )}
-              {!hasActivity && isToday && (
-                <View style={[bannerStyles.dot, { backgroundColor: Colors.electric + '80' }]} />
-              )}
+              <View style={[
+                bannerStyles.daydot,
+                hasActivity && { backgroundColor: accentColor },
+                isToday && !hasActivity && { borderWidth: 1.5, borderColor: Colors.electric },
+              ]} />
             </View>
           )
         })}
       </View>
 
-      {/* Stats row */}
-      {sessions > 0 ? (
-        <View style={bannerStyles.statsRow}>
-          <Text style={bannerStyles.statChip}>🏅 {sessions} séance{sessions > 1 ? 's' : ''}</Text>
-          <Text style={bannerStyles.statChip}>⏱ {durationStr}</Text>
-          {totalCal > 0 && (
-            <Text style={bannerStyles.statChip}>🔥 {totalCal.toLocaleString('fr-FR')} kcal</Text>
-          )}
-        </View>
-      ) : (
-        <Text style={bannerStyles.emptyHint}>Ajoute ta première séance de la semaine !</Text>
-      )}
-
-      {/* Goal progress */}
+      {/* Goal bar */}
       {goal !== null && goalResult !== null && (
-        <View style={bannerStyles.goalWrap}>
-          <View style={bannerStyles.goalHeader}>
-            <Text style={bannerStyles.goalLabel}>
-              {GOAL_TYPE_EMOJI[goal.type]} Objectif {GOAL_TYPE_LABEL[goal.type]}/sem.{goal.sport && goal.sport !== 'all' ? ` · ${SPORT_EMOJI[goal.sport as keyof typeof SPORT_EMOJI] ?? ''}` : ''}
-            </Text>
-            <Text style={bannerStyles.goalCount}>
-              {goalResult.current} / {goal.value} {GOAL_TYPE_LABEL[goal.type]}
-              {goalProgress === 1 ? ' 🎉' : ''}
-            </Text>
-          </View>
-          <View style={bannerStyles.goalBar}>
-            <View style={[bannerStyles.goalFill, { width: `${(goalProgress ?? 0) * 100}%` as any }]} />
+        <View style={bannerStyles.goalRow}>
+          <Text style={bannerStyles.goalLabel}>
+            {GOAL_TYPE_EMOJI[goal.type]} {goalResult.current}/{goal.value} {GOAL_TYPE_LABEL[goal.type]}
+            {goalProgress === 1 ? ' 🎉' : ''}
+          </Text>
+          <View style={bannerStyles.goalBarOuter}>
+            <View style={[bannerStyles.goalBarFill, { width: `${(goalProgress ?? 0) * 100}%` as any }]} />
           </View>
         </View>
       )}
@@ -406,24 +390,19 @@ const feedStyles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
-    padding: Spacing.sm,
+    borderRadius: Radius.full,
+    paddingVertical: 8,
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
-    ...Shadow.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   postBarHint: {
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.textTertiary,
   },
-  postBarBtn: {
-    backgroundColor: Colors.electric,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-  },
-  postBarBtnTxt: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+  postBarIcon: { fontSize: 15, opacity: 0.5 },
 })
 
 const styles = StyleSheet.create({
@@ -446,70 +425,71 @@ const bannerStyles = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    ...Shadow.sm,
+    padding: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    gap: 8,
+    marginBottom: Spacing.xs,
   },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   label: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  statInline: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    fontWeight: FontWeight.medium,
+  },
   streakChip: {
     backgroundColor: '#FFF7ED',
     borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: '#FED7AA',
   },
-  streakText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: '#C2410C' },
-  days: { flexDirection: 'row', gap: 5 },
-  day: {
+  streakText: { fontSize: 11, fontWeight: FontWeight.bold, color: '#C2410C' },
+  days: { flexDirection: 'row', gap: 4 },
+  dayWrap: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: Colors.bgAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+    gap: 4,
   },
   dayLabel: {
-    fontSize: FontSize.xs,
+    fontSize: 10,
     fontWeight: FontWeight.semibold,
     color: Colors.textTertiary,
   },
-  dot: { width: 5, height: 5, borderRadius: 3 },
-  statsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-  },
-  statChip: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
-    color: Colors.textSecondary,
+  daydot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.bgAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
   },
-  emptyHint: {
+  goalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  goalLabel: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontStyle: 'italic',
+    minWidth: 90,
   },
-  goalWrap: { gap: 5 },
-  goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  goalBarOuter: {
+    flex: 1,
+    height: 5,
+    backgroundColor: Colors.bgAlt,
+    borderRadius: 3,
+    overflow: 'hidden',
   },
-  goalLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  goalCount: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.electric },
-  goalBar: { height: 6, backgroundColor: Colors.bgAlt, borderRadius: 3, overflow: 'hidden' },
-  goalFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
+  goalBarFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
 })
 
 const emptyStyles = StyleSheet.create({

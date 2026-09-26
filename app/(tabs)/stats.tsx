@@ -90,7 +90,7 @@ export default function StatsScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="🔬 Labo" />
+      <ScreenHeader title="Labo" />
 
       {/* Tab bar with sliding indicator */}
       <View
