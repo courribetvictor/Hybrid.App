@@ -238,7 +238,8 @@ export default function ProfileScreen() {
 
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
       const finalUrl = publicUrl + `?t=${Date.now()}`
-      setAvatarUri(finalUrl) // mise à jour locale immédiate
+      setAvatarUri(finalUrl)
+      await AsyncStorage.setItem('pref_avatar', finalUrl)
       await updateProfile({ avatar_url: finalUrl })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     } catch (e: any) {
@@ -264,16 +265,30 @@ export default function ProfileScreen() {
   const [unit, setUnit] = useState<PreferredUnit>('metric')
   const [lang, setLang] = useState<PreferredLanguage>('fr')
   const [avatarUri, setAvatarUri] = useState<string | null>(null)
-  // Sync once from DB when profile first loads
-  const prefsLoaded = useRef(false)
+
+  // Load preferences from AsyncStorage first (instant), then from DB
   useEffect(() => {
-    if (profile && !prefsLoaded.current) {
-      if (profile.preferred_unit)     setUnit(profile.preferred_unit)
-      if (profile.preferred_language) setLang(profile.preferred_language)
-      if (profile.avatar_url)         setAvatarUri(profile.avatar_url)
-      prefsLoaded.current = true
-    }
-  }, [profile])
+    AsyncStorage.multiGet(['pref_unit', 'pref_lang', 'pref_avatar']).then(pairs => {
+      const stored = Object.fromEntries(pairs.map(([k, v]) => [k, v]))
+      if (stored.pref_unit)   setUnit(stored.pref_unit as PreferredUnit)
+      if (stored.pref_lang)   setLang(stored.pref_lang as PreferredLanguage)
+      if (stored.pref_avatar) setAvatarUri(stored.pref_avatar)
+    })
+  }, [])
+
+  // Once profile loads from DB, use DB values only if no local pref stored yet
+  useEffect(() => {
+    if (!profile) return
+    AsyncStorage.getItem('pref_unit').then(v => {
+      if (!v && profile.preferred_unit) setUnit(profile.preferred_unit)
+    })
+    AsyncStorage.getItem('pref_lang').then(v => {
+      if (!v && profile.preferred_language) setLang(profile.preferred_language)
+    })
+    AsyncStorage.getItem('pref_avatar').then(v => {
+      if (!v && profile.avatar_url) setAvatarUri(profile.avatar_url)
+    })
+  }, [profile?.id]) // only on first profile load (id change)
 
   const hybridScore = computeHybridScore(activities)
   const scoreProgress = hybridScore / HYBRID_SCORE_MAX
@@ -292,26 +307,20 @@ export default function ProfileScreen() {
 
   const handleToggleUnit = useCallback(async () => {
     const next: PreferredUnit = unit === 'imperial' ? 'metric' : 'imperial'
-    setUnit(next) // UI immédiat — ne revient pas en arrière même si DB échoue
+    setUnit(next)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    try {
-      await updateProfile({ preferred_unit: next })
-    } catch (e: any) {
-      console.error('updateProfile unit error:', e?.message)
-      // Ne pas réverter — la préférence reste active localement
-      // Si la colonne manque dans Supabase, lance la migration SQL profile_prefs
-    }
+    // AsyncStorage = source de vérité locale, toujours fiable
+    await AsyncStorage.setItem('pref_unit', next)
+    // Synchro Supabase best-effort (silencieuse si colonne manquante)
+    updateProfile({ preferred_unit: next }).catch(() => {})
   }, [unit, updateProfile])
 
   const handleToggleLang = useCallback(async () => {
     const next: PreferredLanguage = lang === 'en' ? 'fr' : 'en'
-    setLang(next) // UI immédiat — ne revient pas en arrière même si DB échoue
+    setLang(next)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    try {
-      await updateProfile({ preferred_language: next })
-    } catch (e: any) {
-      console.error('updateProfile lang error:', e?.message)
-    }
+    await AsyncStorage.setItem('pref_lang', next)
+    updateProfile({ preferred_language: next }).catch(() => {})
   }, [lang, updateProfile])
 
   const handleSignOut = useCallback(async () => {
