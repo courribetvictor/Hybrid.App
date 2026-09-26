@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Stack, router } from 'expo-router'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { StyleSheet } from 'react-native'
@@ -14,19 +14,25 @@ export default function RootLayout() {
   const { profile } = useProfile(userId ?? undefined)
 
   const [language, setLanguage] = useState<PreferredLanguage>('fr')
+  const didInitialNav = useRef(false)
 
   // Sync language preference from profile
   useEffect(() => {
     if (profile?.preferred_language) setLanguage(profile.preferred_language)
   }, [profile?.preferred_language])
 
-  // Auth guard: redirect after session is known
+  // Auth guard: redirect once on startup, then only on sign-out
   useEffect(() => {
     if (!ready) return
     SplashScreen.hideAsync()
-    if (userId) {
-      router.replace('/(tabs)')
-    } else {
+    if (!didInitialNav.current) {
+      // First time ready — navigate to the right root
+      didInitialNav.current = true
+      router.replace(userId ? '/(tabs)' : '/(auth)/login')
+      return
+    }
+    // After initial nav: only handle sign-out (userId going null)
+    if (!userId) {
       router.replace('/(auth)/login')
     }
   }, [ready, userId])
@@ -55,14 +61,6 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="modals/paywall"
-            options={{ presentation: 'modal', headerShown: false }}
-          />
-          <Stack.Screen
-            name="modals/notifications"
-            options={{ presentation: 'modal', headerShown: false }}
-          />
-          <Stack.Screen
-            name="modals/privacy"
             options={{ presentation: 'modal', headerShown: false }}
           />
           <Stack.Screen
