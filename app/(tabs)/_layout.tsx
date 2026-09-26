@@ -90,7 +90,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 export default function TabLayout() {
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Tabs
         tabBar={props => <CustomTabBar {...(props as any)} />}
         screenOptions={{ headerShown: false }}

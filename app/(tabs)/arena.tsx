@@ -91,7 +91,7 @@ export default function ArenaScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -185,7 +185,7 @@ function TopTabBar({
 function TopTabPill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const opacity = useSharedValue(active ? 1 : 0)
   const animStyle = useAnimatedStyle(() => ({
-    backgroundColor: `rgba(74,139,255,${opacity.value * 0.15})`,
+    backgroundColor: `rgba(0,85,255,${opacity.value * 0.12})`,
   }))
   React.useEffect(() => {
     opacity.value = withTiming(active ? 1 : 0, { duration: 180 })

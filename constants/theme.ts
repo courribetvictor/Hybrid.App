@@ -1,24 +1,24 @@
 export const Colors = {
   // ── Core brand ─────────────────────────────
-  electric: '#4A8BFF',
-  electricLight: '#7AADFF',
-  electricDim: 'rgba(74,139,255,0.15)',
+  electric: '#0055FF',
+  electricLight: '#3378FF',
+  electricDim: 'rgba(0,85,255,0.10)',
 
   // ── Backgrounds ────────────────────────────
-  bg: '#0A0A0F',
-  bgAlt: '#111118',
-  bgCard: '#17172A',
-  bgElevated: '#1F1F32',
+  bg: '#F5F7FF',        // Très légèrement bleuté — les cartes blanches ressortent mieux
+  bgAlt: '#EEF2FF',
+  bgCard: '#FFFFFF',
+  bgElevated: '#FFFFFF',
 
   // ── Text ───────────────────────────────────
-  textPrimary: '#EEF0FF',
-  textSecondary: '#8A90B8',
-  textTertiary: '#525770',
+  textPrimary: '#0F1117',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
   textInverse: '#FFFFFF',
 
   // ── Borders & dividers ─────────────────────
-  border: 'rgba(255,255,255,0.08)',
-  borderLight: 'rgba(255,255,255,0.05)',
+  border: '#E5E7EB',
+  borderLight: '#EEF2FF',
 
   // ── Semantic ───────────────────────────────
   success: '#10B981',
@@ -30,7 +30,7 @@ export const Colors = {
   running:   '#FF6B35',
   cycling:   '#8B5CF6',
   swimming:  '#06B6D4',
-  gym:       '#4A8BFF',
+  gym:       '#0055FF',
   badminton: '#10B981',
   athletics: '#F59E0B',
   football:  '#22C55E',
@@ -42,12 +42,12 @@ export const Colors = {
 
 // Pre-defined gradients for LinearGradient
 export const Gradients = {
-  electric: ['#2563EB', '#0EA5E9'] as const,
-  pro:      ['#2563EB', '#7C3AED'] as const,
-  arena:    ['#1A0A2E', '#0A1428'] as const,
+  electric: ['#0055FF', '#0EA5E9'] as const,
+  pro:      ['#0055FF', '#7C3AED'] as const,
+  arena:    ['#1E0A4A', '#0A1E4A'] as const,
   gold:     ['#F59E0B', '#FCD34D'] as const,
   warm:     ['#FF6B35', '#F59E0B'] as const,
-  dark:     ['#17172A', '#0A0A0F'] as const,
+  soft:     ['#EEF2FF', '#F5F7FF'] as const,
 } as const
 
 export const Spacing = {
@@ -69,32 +69,32 @@ export const Radius = {
 
 export const Shadow = {
   sm: {
-    shadowColor: '#000',
+    shadowColor: '#0055FF',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: '#0055FF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
-    shadowRadius: 14,
-    elevation: 6,
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 4,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: '#0055FF',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
+    shadowOpacity: 0.14,
     shadowRadius: 28,
-    elevation: 12,
+    elevation: 8,
   },
   glow: {
-    shadowColor: '#4A8BFF',
+    shadowColor: '#0055FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
+    shadowOpacity: 0.35,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 8,
   },
 } as const
 
