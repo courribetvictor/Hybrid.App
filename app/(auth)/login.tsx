@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native'
 import Animated, {
@@ -31,13 +30,15 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const btnScale = useSharedValue(1)
   const btnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }))
 
   const handleLogin = useCallback(async () => {
+    setErrorMsg(null)
     if (!email.trim() || !password) {
-      Alert.alert('Champs requis', 'Merci de remplir l\'email et le mot de passe.')
+      setErrorMsg('Merci de remplir l\'email et le mot de passe.')
       return
     }
     btnScale.value = withSpring(0.96, { damping: 8, stiffness: 400 }, () => {
@@ -51,10 +52,9 @@ export default function LoginScreen() {
     })
     setLoading(false)
     if (error) {
-      Alert.alert('Connexion impossible', error.message)
-    } else {
-      router.replace('/(tabs)')
+      setErrorMsg(error.message)
     }
+    // Pas de router.replace ici — _layout.tsx redirige via onAuthStateChange
   }, [email, password, btnScale])
 
   return (
@@ -82,6 +82,12 @@ export default function LoginScreen() {
         {/* Form */}
         <Animated.View entering={FadeInDown.delay(150).duration(500)} style={styles.form}>
           <Text style={styles.formTitle}>Connexion</Text>
+
+          {errorMsg && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          )}
 
           <Field
             label="Email"
@@ -193,6 +199,15 @@ const styles = StyleSheet.create({
   btnLoading: { opacity: 0.75 },
   btnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: '#fff', letterSpacing: 0.3 },
   eyeIcon: { fontSize: 18 },
+  errorBanner: {
+    backgroundColor: Colors.error + '18',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.error + '40',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  errorText: { fontSize: FontSize.sm, color: Colors.error, fontWeight: FontWeight.medium },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   footerText: { fontSize: FontSize.sm, color: Colors.textSecondary },
   footerLink: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.electric },

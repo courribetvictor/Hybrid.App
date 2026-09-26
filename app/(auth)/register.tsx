@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Image,
 } from 'react-native'
@@ -39,6 +38,8 @@ export default function RegisterScreen() {
   const [favSports, setFavSports] = useState<SportType[]>([])
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [emailSent, setEmailSent] = useState(false)
 
   const toggleSport = useCallback((s: SportType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -48,12 +49,13 @@ export default function RegisterScreen() {
   }, [])
 
   const handleNext = useCallback(() => {
+    setErrorMsg(null)
     if (!email.trim() || !password || !username.trim()) {
-      Alert.alert('Champs requis', 'Merci de remplir tous les champs.')
+      setErrorMsg('Merci de remplir tous les champs.')
       return
     }
     if (password.length < 6) {
-      Alert.alert('Mot de passe trop court', 'Minimum 6 caractères.')
+      setErrorMsg('Le mot de passe doit faire au moins 6 caractères.')
       return
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -61,24 +63,23 @@ export default function RegisterScreen() {
   }, [email, password, username])
 
   const handleRegister = useCallback(async () => {
+    setErrorMsg(null)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setLoading(true)
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      options: {
-        data: { username: username.trim() },
-      },
+      options: { data: { username: username.trim() } },
     })
 
     if (error) {
       setLoading(false)
-      Alert.alert('Inscription impossible', error.message)
+      setErrorMsg(error.message)
       return
     }
 
-    // Update profile with username (trigger creates the row, we patch it)
+    // Patch username on profile row (created by DB trigger)
     if (data.user) {
       await supabase
         .from('profiles')
@@ -88,18 +89,35 @@ export default function RegisterScreen() {
 
     setLoading(false)
 
-    // Si confirmation email désactivée → session active directement
     if (data.session) {
-      router.replace('/(tabs)')
+      // Session immédiate (confirmation email désactivée) → auth guard redirige
+      // Pas besoin de router.replace ici, _layout.tsx s'en charge via onAuthStateChange
     } else {
-      // Email de confirmation envoyé
-      Alert.alert(
-        'Vérifie tes emails 📬',
-        'Un lien de confirmation a été envoyé à ' + email.trim() + '. Clique dessus puis reviens te connecter.',
-        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
-      )
+      // Confirmation email requise
+      setEmailSent(true)
     }
   }, [email, password, username])
+
+  if (emailSent) {
+    return (
+      <View style={styles.centeredFull}>
+        <Text style={styles.bigEmoji}>📬</Text>
+        <Text style={styles.successTitle}>Vérifie tes emails</Text>
+        <Text style={styles.successSub}>
+          Un lien de confirmation a été envoyé à{'\n'}
+          <Text style={styles.emailHighlight}>{email.trim()}</Text>
+          {'\n'}Clique dessus, puis reviens te connecter.
+        </Text>
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() => router.replace('/(auth)/login')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.btnText}>Aller à la connexion</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  }
 
   return (
     <KeyboardAvoidingView
@@ -133,6 +151,13 @@ export default function RegisterScreen() {
           <View style={[styles.step, step >= 1 && styles.stepActive]} />
           <View style={[styles.step, step >= 2 && styles.stepActive]} />
         </Animated.View>
+
+        {/* Error banner */}
+        {errorMsg && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        )}
 
         {step === 1 ? (
           <Animated.View entering={FadeInDown.delay(150)} style={styles.form}>
@@ -252,6 +277,27 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   scroll: { paddingHorizontal: Spacing.xl, gap: Spacing.lg },
+  centeredFull: {
+    flex: 1,
+    backgroundColor: Colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  bigEmoji: { fontSize: 56 },
+  successTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, textAlign: 'center' },
+  successSub: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  emailHighlight: { fontWeight: FontWeight.bold, color: Colors.electric },
+  errorBanner: {
+    backgroundColor: Colors.error + '18',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.error + '40',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+  },
+  errorText: { fontSize: FontSize.sm, color: Colors.error, fontWeight: FontWeight.medium },
   logoWrap: { alignItems: 'center', gap: Spacing.sm },
   logoMark: { width: 64, height: 64 },
   logoText: { width: 160, height: 36 },
