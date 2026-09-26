@@ -9,6 +9,12 @@ export type SportType =
   | 'football' | 'tennis' | 'hiking' | 'yoga' | 'boxing'
 export type FriendshipStatus = 'pending' | 'accepted'
 
+export interface Follow {
+  follower_id: string
+  following_id: string
+  created_at: string
+}
+
 // ── Sport-specific JSONB metric shapes ──────────────────────
 
 export interface EnduranceMetrics {
@@ -197,6 +203,12 @@ export type Database = {
         Row: DbRow<Activity>
         Insert: DbRow<Omit<Activity, 'id' | 'created_at'> & { id?: string; created_at?: string }>
         Update: DbRow<Partial<Omit<Activity, 'id' | 'user_id' | 'created_at'>>>
+        Relationships: []
+      }
+      follows: {
+        Row: DbRow<Follow>
+        Insert: DbRow<Omit<Follow, 'created_at'> & { created_at?: string }>
+        Update: DbRow<Record<string, never>>
         Relationships: []
       }
       friendships: {

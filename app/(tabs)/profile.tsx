@@ -24,6 +24,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
 import { useWeeklyGoal } from '@/hooks/useGoal'
 import type { GoalConfig, GoalType } from '@/hooks/useGoal'
+import { useFollows } from '@/hooks/useFollows'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
 import type { PreferredUnit, Profile, SportType, Activity } from '@/types/database'
@@ -192,6 +193,7 @@ export default function ProfileScreen() {
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, 90)
   const { goal, setGoal, clearGoal } = useWeeklyGoal()
   const { extra, setExtra } = useProfileExtra()
+  const { followingCount, followersCount } = useFollows(userId ?? undefined)
 
   const [paywallVisible, setPaywallVisible] = useState(false)
   const [editVisible, setEditVisible] = useState(false)
@@ -343,6 +345,20 @@ export default function ProfileScreen() {
           {extra.bio ? (
             <Text style={styles.bio}>{extra.bio}</Text>
           ) : null}
+
+          {/* Follow counts */}
+          <View style={styles.followRow}>
+            <View style={styles.followItem}>
+              <Text style={styles.followNum}>{followingCount}</Text>
+              <Text style={styles.followLbl}>Abonnements</Text>
+            </View>
+            <View style={styles.followDivider} />
+            <View style={styles.followItem}>
+              <Text style={styles.followNum}>{followersCount}</Text>
+              <Text style={styles.followLbl}>Abonnés</Text>
+            </View>
+          </View>
+
           <View style={styles.heroBadges}>
             {profile?.is_pro && (
               <View style={styles.proBadge}>
@@ -1133,6 +1149,15 @@ const styles = StyleSheet.create({
   proText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.electric },
   joined: { fontSize: FontSize.sm, color: Colors.textTertiary },
   heroBadges: { flexDirection: 'row', gap: Spacing.xs, justifyContent: 'center', flexWrap: 'wrap' },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  followItem: { alignItems: 'center', gap: 1 },
+  followNum: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
+  followLbl: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  followDivider: { width: 1, height: 28, backgroundColor: Colors.borderLight },
   streakBadge: {
     backgroundColor: '#FFF7ED',
     paddingHorizontal: 10,
