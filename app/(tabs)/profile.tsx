@@ -29,7 +29,7 @@ import { SPORT_GOAL_OPTIONS, GLOBAL_GOAL_OPTIONS } from '@/constants/exercises'
 import { useFollows } from '@/hooks/useFollows'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
-import type { PreferredUnit, Profile, SportType, Activity } from '@/types/database'
+import type { PreferredUnit, PreferredLanguage, Profile, SportType, Activity } from '@/types/database'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -273,13 +273,21 @@ export default function ProfileScreen() {
   const handleToggleUnit = useCallback(async () => {
     const next: PreferredUnit = unit === 'imperial' ? 'metric' : 'imperial'
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await updateProfile({ preferred_unit: next })
+    try {
+      await updateProfile({ preferred_unit: next })
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Impossible de changer les unités')
+    }
   }, [unit, updateProfile])
 
   const handleToggleLang = useCallback(async () => {
-    const next = lang === 'en' ? 'fr' : 'en'
+    const next: PreferredLanguage = lang === 'en' ? 'fr' : 'en'
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await updateProfile({ preferred_language: next })
+    try {
+      await updateProfile({ preferred_language: next })
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Impossible de changer la langue')
+    }
   }, [lang, updateProfile])
 
   const handleSignOut = useCallback(async () => {
