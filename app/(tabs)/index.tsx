@@ -25,6 +25,7 @@ import { useFriendFeed, useActivities } from '@/hooks/useActivities'
 import { useFriendships } from '@/hooks/useFriendships'
 import { useProfile, useSession } from '@/hooks/useProfile'
 import { useWeeklyGoal } from '@/hooks/useGoal'
+import type { GoalConfig } from '@/hooks/useGoal'
 import type { Activity, ActivityWithProfile, SportType } from '@/types/database'
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<ActivityWithProfile>)
@@ -61,7 +62,7 @@ export default function FeedScreen() {
   const { friendIds } = useFriendships(userId ?? undefined)
   const { feed, loading, refetch } = useFriendFeed(friendIds)
   const { activities: ownActivities, refetch: refetchOwn } = useActivities(userId ?? undefined, 7)
-  const { weeklyGoal } = useWeeklyGoal()
+  const { goal } = useWeeklyGoal()
 
   const scrollY = useSharedValue(0)
   const fabScale = useSharedValue(1)
@@ -98,7 +99,7 @@ export default function FeedScreen() {
   const header = (
     <WeekSummaryBanner
       activities={ownActivities}
-      weeklyGoal={weeklyGoal}
+      goal={goal}
     />
   )
 
@@ -153,12 +154,39 @@ const SPORT_EMOJI: Partial<Record<SportType, string>> = {
   hiking: '🥾', yoga: '🧘', boxing: '🥊',
 }
 
+const GOAL_TYPE_LABEL: Record<string, string> = {
+  sessions: 'séances', minutes: 'min', km: 'km',
+}
+const GOAL_TYPE_EMOJI: Record<string, string> = {
+  sessions: '🏅', minutes: '⏱', km: '📍',
+}
+
+function computeGoalProgress(goal: GoalConfig, activities: Activity[]): { current: number; progress: number } {
+  switch (goal.type) {
+    case 'sessions': {
+      const current = activities.length
+      return { current, progress: Math.min(current / goal.value, 1) }
+    }
+    case 'minutes': {
+      const current = Math.round(activities.reduce((s, a) => s + a.duration_seconds, 0) / 60)
+      return { current, progress: Math.min(current / goal.value, 1) }
+    }
+    case 'km': {
+      const current = parseFloat(activities.reduce((s, a) => {
+        const m = (a as any).metrics
+        return s + (m?.distance_m ? m.distance_m / 1000 : 0)
+      }, 0).toFixed(1))
+      return { current, progress: Math.min(current / goal.value, 1) }
+    }
+  }
+}
+
 function WeekSummaryBanner({
   activities,
-  weeklyGoal,
+  goal,
 }: {
   activities: Activity[]
-  weeklyGoal: number | null
+  goal: GoalConfig | null
 }) {
   const now = new Date()
   const dayOfWeek = now.getDay()
@@ -200,7 +228,8 @@ function WeekSummaryBanner({
 
   const streak = useMemo(() => computeStreak(activities), [activities])
 
-  const goalProgress = weeklyGoal ? Math.min(sessions / weeklyGoal, 1) : null
+  const goalResult = goal ? computeGoalProgress(goal, activities) : null
+  const goalProgress = goalResult?.progress ?? null
 
   return (
     <View style={bannerStyles.card}>
@@ -266,12 +295,14 @@ function WeekSummaryBanner({
       )}
 
       {/* Goal progress */}
-      {weeklyGoal !== null && (
+      {goal !== null && goalResult !== null && (
         <View style={bannerStyles.goalWrap}>
           <View style={bannerStyles.goalHeader}>
-            <Text style={bannerStyles.goalLabel}>Objectif semaine</Text>
+            <Text style={bannerStyles.goalLabel}>
+              {GOAL_TYPE_EMOJI[goal.type]} Objectif {GOAL_TYPE_LABEL[goal.type]}/sem.
+            </Text>
             <Text style={bannerStyles.goalCount}>
-              {sessions} / {weeklyGoal}
+              {goalResult.current} / {goal.value} {GOAL_TYPE_LABEL[goal.type]}
               {goalProgress === 1 ? ' 🎉' : ''}
             </Text>
           </View>

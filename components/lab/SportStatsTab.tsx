@@ -43,14 +43,27 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
     [activities, activeSport],
   )
 
+  const sportCounts = useMemo(() => {
+    const counts: Partial<Record<SportType, number>> = {}
+    for (const a of activities) {
+      counts[a.sport_type] = (counts[a.sport_type] ?? 0) + 1
+    }
+    return counts
+  }, [activities])
+
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <View style={styles.content}>
       {/* Sport filter pills */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <View style={styles.filterSection}>
+        <Text style={styles.filterHint}>Sélectionne un sport ↓</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {SPORT_FILTERS.map(s => (
           <TouchableOpacity
             key={s.key}
-            style={[styles.filterChip, activeSport === s.key && { backgroundColor: SportColors[s.key] }]}
+            style={[
+              styles.filterChip,
+              activeSport === s.key && { backgroundColor: SportColors[s.key], borderColor: SportColors[s.key] },
+            ]}
             onPress={() => setActiveSport(s.key)}
             activeOpacity={0.75}
           >
@@ -58,12 +71,20 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
             <Text style={[styles.filterLabel, activeSport === s.key && styles.filterLabelActive]}>
               {s.label}
             </Text>
+            {sportCounts[s.key] ? (
+              <View style={[styles.filterCount, activeSport === s.key && styles.filterCountActive]}>
+                <Text style={[styles.filterCountText, activeSport === s.key && styles.filterCountTextActive]}>
+                  {sportCounts[s.key]}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         ))}
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {filtered.length === 0 ? (
-        <EmptyState sport={activeSport} />
+        <EmptyState sport={activeSport} sportCounts={sportCounts} onSelect={setActiveSport} />
       ) : (
         <>
           {activeSport === 'gym' && <GymStats activities={filtered} unit={unit} />}
@@ -79,7 +100,7 @@ export function SportStatsTab({ activities, unit }: SportStatsTabProps) {
           {activeSport === 'athletics' && <AthleticsStats activities={filtered} />}
         </>
       )}
-    </ScrollView>
+    </View>
   )
 }
 
@@ -736,16 +757,44 @@ function StatMini({ label, value, highlight, color }: {
   )
 }
 
-function EmptyState({ sport }: { sport: SportType }) {
+function EmptyState({ sport, sportCounts, onSelect }: {
+  sport: SportType
+  sportCounts: Partial<Record<SportType, number>>
+  onSelect: (s: SportType) => void
+}) {
   const EMOJI: Record<SportType, string> = {
     running: '🏃', cycling: '🚴', swimming: '🏊',
     gym: '🏋️', badminton: '🏸', athletics: '⚡',
     football: '⚽', tennis: '🎾', hiking: '🥾', yoga: '🧘', boxing: '🥊',
   }
+  const availableSports = Object.keys(sportCounts) as SportType[]
+
   return (
     <View style={styles.empty}>
       <Text style={{ fontSize: 40 }}>{EMOJI[sport]}</Text>
-      <Text style={styles.emptyText}>Aucune séance enregistrée</Text>
+      <Text style={styles.emptyText}>Aucune séance enregistrée pour ce sport</Text>
+      {availableSports.length > 0 && (
+        <>
+          <Text style={[styles.emptyText, { fontSize: FontSize.xs, marginTop: 4 }]}>
+            Tes sports actifs :
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 6 }}>
+            {availableSports.map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.filterChip, { backgroundColor: SportColors[s] + '20', borderColor: SportColors[s] + '60' }]}
+                onPress={() => onSelect(s)}
+              >
+                <Text style={styles.filterEmoji}>{EMOJI[s]}</Text>
+                <Text style={[styles.filterLabel, { color: SportColors[s] }]}>
+                  {SPORT_FILTERS.find(f => f.key === s)?.label ?? s}
+                </Text>
+                <Text style={[styles.filterCountText, { color: SportColors[s] }]}>{sportCounts[s]}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
     </View>
   )
 }
@@ -786,6 +835,8 @@ function makeChartConfig(accentColor: string) {
 
 const styles = StyleSheet.create({
   content: { gap: Spacing.md, paddingBottom: 40 },
+  filterSection: { gap: 6 },
+  filterHint: { fontSize: FontSize.xs, color: Colors.textTertiary, marginBottom: 2 },
   filterRow: { gap: Spacing.sm, paddingBottom: Spacing.xs },
   filterChip: {
     flexDirection: 'row',
@@ -795,10 +846,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: Radius.full,
     backgroundColor: Colors.bgAlt,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   filterEmoji: { fontSize: 15 },
   filterLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textSecondary },
   filterLabelActive: { color: Colors.textInverse },
+  filterCount: {
+    backgroundColor: Colors.border,
+    borderRadius: Radius.full,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  filterCountActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  filterCountText: { fontSize: 9, fontWeight: FontWeight.bold, color: Colors.textTertiary },
+  filterCountTextActive: { color: Colors.textInverse },
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,

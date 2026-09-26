@@ -5,20 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Modal,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
 } from 'react-native'
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -28,6 +22,7 @@ import { useProfile, useSession } from '@/hooks/useProfile'
 import { useActivities } from '@/hooks/useActivities'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
 import { useWeeklyGoal } from '@/hooks/useGoal'
+import type { GoalConfig, GoalType } from '@/hooks/useGoal'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
 import type { PreferredUnit, Profile, SportType, Activity } from '@/types/database'
@@ -51,17 +46,17 @@ interface Achievement {
 }
 
 const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_step',    emoji: '🌱', label: 'Premiers pas',     desc: '1ère séance',        check: ({ count }) => count >= 1 },
-  { id: 'ten',           emoji: '🔟', label: 'En route',         desc: '10 séances',         check: ({ count }) => count >= 10 },
-  { id: 'fifty',         emoji: '⭐', label: 'Régulier',         desc: '50 séances',         check: ({ count }) => count >= 50 },
-  { id: 'hundred',       emoji: '💯', label: 'Centurion',        desc: '100 séances',        check: ({ count }) => count >= 100 },
-  { id: 'three_sports',  emoji: '🎯', label: 'Hybride',          desc: '3 sports différents',check: ({ sports }) => sports >= 3 },
-  { id: 'five_sports',   emoji: '🌟', label: 'Polyvalent',       desc: '5 sports différents',check: ({ sports }) => sports >= 5 },
-  { id: 'seven_sports',  emoji: '👑', label: 'Athlète complet',  desc: '7 sports différents',check: ({ sports }) => sports >= 7 },
-  { id: 'ten_hours',     emoji: '⏱', label: 'Endurant',         desc: '10h d\'entraînement', check: ({ totalHours }) => totalHours >= 10 },
-  { id: 'fifty_hours',   emoji: '🏆', label: 'Passionné',        desc: '50h d\'entraînement', check: ({ totalHours }) => totalHours >= 50 },
-  { id: 'streak_7',      emoji: '🔥', label: 'Semaine de feu',   desc: '7j consécutifs',     check: ({ streak }) => streak >= 7 },
-  { id: 'streak_30',     emoji: '🚀', label: 'Mois de fer',      desc: '30j consécutifs',    check: ({ streak }) => streak >= 30 },
+  { id: 'first_step',   emoji: '🌱', label: 'Premiers pas',    desc: '1ère séance',         check: ({ count }) => count >= 1 },
+  { id: 'ten',          emoji: '🔟', label: 'En route',        desc: '10 séances',          check: ({ count }) => count >= 10 },
+  { id: 'fifty',        emoji: '⭐', label: 'Régulier',        desc: '50 séances',          check: ({ count }) => count >= 50 },
+  { id: 'hundred',      emoji: '💯', label: 'Centurion',       desc: '100 séances',         check: ({ count }) => count >= 100 },
+  { id: 'three_sports', emoji: '🎯', label: 'Hybride',         desc: '3 sports différents', check: ({ sports }) => sports >= 3 },
+  { id: 'five_sports',  emoji: '🌟', label: 'Polyvalent',      desc: '5 sports différents', check: ({ sports }) => sports >= 5 },
+  { id: 'seven_sports', emoji: '👑', label: 'Athlète complet', desc: '7 sports différents', check: ({ sports }) => sports >= 7 },
+  { id: 'ten_hours',    emoji: '⏱', label: 'Endurant',        desc: "10h d'entraînement",  check: ({ totalHours }) => totalHours >= 10 },
+  { id: 'fifty_hours',  emoji: '🏆', label: 'Passionné',       desc: "50h d'entraînement",  check: ({ totalHours }) => totalHours >= 50 },
+  { id: 'streak_7',     emoji: '🔥', label: 'Semaine de feu',  desc: '7j consécutifs',      check: ({ streak }) => streak >= 7 },
+  { id: 'streak_30',    emoji: '🚀', label: 'Mois de fer',     desc: '30j consécutifs',     check: ({ streak }) => streak >= 30 },
 ]
 
 function computeStreak(activities: Activity[]): number {
@@ -85,7 +80,24 @@ function computeStreak(activities: Activity[]): number {
   return 0
 }
 
-const GOAL_OPTIONS = [2, 3, 4, 5, 6, 7]
+const GOAL_TYPE_OPTIONS: { type: GoalType; label: string; emoji: string; unit: string }[] = [
+  { type: 'sessions', label: 'Séances', emoji: '🏅', unit: 'séances' },
+  { type: 'minutes',  label: 'Minutes', emoji: '⏱',  unit: 'min' },
+  { type: 'km',       label: 'Distance', emoji: '📍', unit: 'km' },
+]
+
+const GOAL_VALUES: Record<GoalType, number[]> = {
+  sessions: [1, 2, 3, 4, 5, 6, 7, 10, 14],
+  minutes:  [60, 90, 120, 150, 180, 210, 240, 300, 360],
+  km:       [10, 20, 30, 40, 50, 75, 100, 150, 200],
+}
+
+const FITNESS_LEVELS = [
+  { key: 'beginner',     label: 'Débutant',      emoji: '🌱' },
+  { key: 'intermediate', label: 'Intermédiaire', emoji: '💪' },
+  { key: 'advanced',     label: 'Avancé',        emoji: '🔥' },
+  { key: 'elite',        label: 'Élite',         emoji: '👑' },
+]
 
 const HYBRID_SCORE_MAX = 1000
 
@@ -98,12 +110,87 @@ function computeHybridScore(activities: any[]): number {
   return Math.min(base + durationScore + diversity, HYBRID_SCORE_MAX)
 }
 
+// ── Extra profile AsyncStorage hooks ──────────────────────────
+
+const EXTRA_KEY = 'hybrid_profile_extra'
+interface ProfileExtra { bio: string; fitnessLevel: string }
+const EXTRA_DEFAULT: ProfileExtra = { bio: '', fitnessLevel: '' }
+
+function useProfileExtra() {
+  const [extra, setExtraState] = useState<ProfileExtra>(EXTRA_DEFAULT)
+
+  useEffect(() => {
+    AsyncStorage.getItem(EXTRA_KEY).then(v => {
+      if (v) { try { setExtraState(JSON.parse(v)) } catch {} }
+    })
+  }, [])
+
+  const setExtra = useCallback(async (update: Partial<ProfileExtra>) => {
+    const next = { ...extra, ...update }
+    setExtraState(next)
+    await AsyncStorage.setItem(EXTRA_KEY, JSON.stringify(next))
+  }, [extra])
+
+  return { extra, setExtra }
+}
+
+const NOTIF_KEY = 'hybrid_notif_settings'
+const NOTIF_DEFAULTS: Record<string, boolean> = {
+  new_challenges: true, friend_activity: true, reminders: false, weekly_summary: true,
+}
+
+function useNotifSettings() {
+  const [settings, setSettingsState] = useState<Record<string, boolean>>(NOTIF_DEFAULTS)
+
+  useEffect(() => {
+    AsyncStorage.getItem(NOTIF_KEY).then(v => {
+      if (v) { try { setSettingsState(JSON.parse(v)) } catch {} }
+    })
+  }, [])
+
+  const toggle = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    const next = { ...settings, [id]: !settings[id] }
+    setSettingsState(next)
+    await AsyncStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+  }, [settings])
+
+  return { settings, toggle }
+}
+
+const PRIVACY_KEY = 'hybrid_privacy_settings'
+const PRIVACY_DEFAULTS: Record<string, boolean> = {
+  public_profile: true, show_activities: true, show_leaderboard: true, show_body_metrics: false,
+}
+
+function usePrivacySettings() {
+  const [settings, setSettingsState] = useState<Record<string, boolean>>(PRIVACY_DEFAULTS)
+
+  useEffect(() => {
+    AsyncStorage.getItem(PRIVACY_KEY).then(v => {
+      if (v) { try { setSettingsState(JSON.parse(v)) } catch {} }
+    })
+  }, [])
+
+  const toggle = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    const next = { ...settings, [id]: !settings[id] }
+    setSettingsState(next)
+    await AsyncStorage.setItem(PRIVACY_KEY, JSON.stringify(next))
+  }, [settings])
+
+  return { settings, toggle }
+}
+
+// ── Screen ────────────────────────────────────────────────────
+
 export default function ProfileScreen() {
   const { userId } = useSession()
   const { profile, updateProfile } = useProfile(userId ?? undefined)
   const { activities } = useActivities(userId ?? undefined, 365)
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, 90)
-  const { weeklyGoal, setGoal, clearGoal } = useWeeklyGoal()
+  const { goal, setGoal, clearGoal } = useWeeklyGoal()
+  const { extra, setExtra } = useProfileExtra()
 
   const [paywallVisible, setPaywallVisible] = useState(false)
   const [editVisible, setEditVisible] = useState(false)
@@ -129,17 +216,17 @@ export default function ProfileScreen() {
   }
   const bmiLabel = bmiKey ? BMI_LABELS[bmiKey] : null
 
-  const handleToggleUnit = useCallback(async (v: boolean) => {
-    const next: PreferredUnit = v ? 'imperial' : 'metric'
+  const handleToggleUnit = useCallback(async () => {
+    const next: PreferredUnit = unit === 'imperial' ? 'metric' : 'imperial'
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     await updateProfile({ preferred_unit: next })
-  }, [updateProfile])
+  }, [unit, updateProfile])
 
-  const handleToggleLang = useCallback(async (v: boolean) => {
-    const next = v ? 'en' : 'fr'
+  const handleToggleLang = useCallback(async () => {
+    const next = lang === 'en' ? 'fr' : 'en'
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     await updateProfile({ preferred_language: next })
-  }, [updateProfile])
+  }, [lang, updateProfile])
 
   const handleSignOut = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -149,7 +236,6 @@ export default function ProfileScreen() {
   const wLabel = unit === 'imperial' ? 'lbs' : 'kg'
   const weightDisplay = latestWeight ? displayWeight(latestWeight, unit) : null
 
-  // Derived profile data
   const allSports = useMemo(
     () => [...new Set(activities.map((a: Activity) => a.sport_type))] as SportType[],
     [activities],
@@ -160,13 +246,29 @@ export default function ProfileScreen() {
   const achievementParams = { count: activities.length, sports: allSports.length, streak, totalHours }
   const unlockedCount = ACHIEVEMENTS.filter(a => a.check(achievementParams)).length
 
-  // This week sessions count (for goal progress)
-  const thisWeekSessions = useMemo(() => {
+  const thisWeekData = useMemo(() => {
     const monday = new Date()
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
     monday.setHours(0, 0, 0, 0)
-    return (activities as Activity[]).filter(a => new Date(a.created_at) >= monday).length
+    const weekActs = (activities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+    const sessions = weekActs.length
+    const minutes = Math.round(weekActs.reduce((s, a) => s + a.duration_seconds, 0) / 60)
+    const km = parseFloat(weekActs.reduce((s, a) => {
+      const m = (a as any).metrics
+      return s + (m?.distance_m ? m.distance_m / 1000 : 0)
+    }, 0).toFixed(1))
+    return { sessions, minutes, km }
   }, [activities])
+
+  const goalCurrentValue = goal
+    ? goal.type === 'sessions' ? thisWeekData.sessions
+    : goal.type === 'minutes' ? thisWeekData.minutes
+    : thisWeekData.km
+    : 0
+
+  const goalProgress = goal ? Math.min(goalCurrentValue / goal.value, 1) : null
+
+  const fitnessLevel = FITNESS_LEVELS.find(f => f.key === extra.fitnessLevel)
 
   return (
     <View style={styles.safe}>
@@ -182,7 +284,17 @@ export default function ProfileScreen() {
             isPro={profile?.is_pro}
             size={72}
           />
-          <Text style={styles.name}>{profile?.username ?? '—'}</Text>
+          <View style={styles.heroTop}>
+            <Text style={styles.name}>{profile?.username ?? '—'}</Text>
+            {fitnessLevel && (
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelText}>{fitnessLevel.emoji} {fitnessLevel.label}</Text>
+              </View>
+            )}
+          </View>
+          {extra.bio ? (
+            <Text style={styles.bio}>{extra.bio}</Text>
+          ) : null}
           <View style={styles.heroBadges}>
             {profile?.is_pro && (
               <View style={styles.proBadge}>
@@ -255,29 +367,43 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setGoalVisible(true) }}
         >
-          <View style={goalStyles.left}>
-            <Text style={goalStyles.title}>🎯  Objectif hebdo</Text>
-            <Text style={goalStyles.sub}>
-              {weeklyGoal !== null
-                ? `${thisWeekSessions} / ${weeklyGoal} séances cette semaine`
-                : 'Définis ton objectif de séances par semaine'}
-            </Text>
-          </View>
-          <View style={goalStyles.right}>
-            {weeklyGoal !== null ? (
-              <>
-                <Text style={goalStyles.goalNum}>{weeklyGoal}</Text>
-                <Text style={goalStyles.goalUnit}>/ sem.</Text>
-              </>
-            ) : (
-              <Text style={goalStyles.setLabel}>Définir →</Text>
-            )}
-          </View>
-          {weeklyGoal !== null && (
-            <View style={goalStyles.barWrap}>
-              <View style={goalStyles.bar}>
-                <View style={[goalStyles.barFill, { width: `${Math.min(thisWeekSessions / weeklyGoal, 1) * 100}%` as any }]} />
+          {goal ? (
+            <>
+              <View style={goalStyles.top}>
+                <View style={goalStyles.typeTag}>
+                  <Text style={goalStyles.typeEmoji}>
+                    {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.emoji ?? '🎯'}
+                  </Text>
+                  <Text style={goalStyles.typeLabel}>
+                    Objectif {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.label ?? ''}
+                  </Text>
+                </View>
+                <View style={goalStyles.valueWrap}>
+                  <Text style={goalStyles.goalNum}>{goal.value}</Text>
+                  <Text style={goalStyles.goalUnit}>
+                    {GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.unit ?? ''}/sem.
+                  </Text>
+                </View>
               </View>
+              <View style={goalStyles.progressRow}>
+                <View style={goalStyles.bar}>
+                  <View style={[goalStyles.barFill, { width: `${(goalProgress ?? 0) * 100}%` as any }]} />
+                </View>
+                <Text style={goalStyles.progressLabel}>
+                  {goalCurrentValue} / {goal.value}
+                  {goalProgress === 1 ? ' 🎉' : ''}
+                </Text>
+              </View>
+            </>
+          ) : (
+            <View style={goalStyles.emptyRow}>
+              <View style={goalStyles.emptyLeft}>
+                <Text style={goalStyles.emptyTitle}>🎯 Objectif hebdomadaire</Text>
+                <Text style={goalStyles.emptySub}>
+                  Séances, minutes ou kilomètres par semaine
+                </Text>
+              </View>
+              <Text style={goalStyles.setLabel}>Définir →</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -337,30 +463,19 @@ export default function ProfileScreen() {
         {/* Préférences */}
         <View style={prefStyles.card}>
           <Text style={prefStyles.title}>Préférences</Text>
-          <View style={prefStyles.row}>
-            <View style={prefStyles.label}>
-              <Text style={prefStyles.labelMain}>Unités impériales</Text>
-              <Text style={prefStyles.labelSub}>Miles, livres, pieds</Text>
-            </View>
-            <Switch
-              value={unit === 'imperial'}
-              onValueChange={handleToggleUnit}
-              trackColor={{ false: Colors.border, true: Colors.electricDim }}
-              thumbColor={unit === 'imperial' ? Colors.electric : '#fff'}
-            />
-          </View>
-          <View style={[prefStyles.row, prefStyles.rowLast]}>
-            <View style={prefStyles.label}>
-              <Text style={prefStyles.labelMain}>Langue anglaise</Text>
-              <Text style={prefStyles.labelSub}>Interface en English</Text>
-            </View>
-            <Switch
-              value={lang === 'en'}
-              onValueChange={handleToggleLang}
-              trackColor={{ false: Colors.border, true: Colors.electricDim }}
-              thumbColor={lang === 'en' ? Colors.electric : '#fff'}
-            />
-          </View>
+          <ToggleRow
+            label="Unités impériales"
+            sub="Miles, livres, pieds"
+            value={unit === 'imperial'}
+            onToggle={handleToggleUnit}
+          />
+          <View style={prefStyles.divider} />
+          <ToggleRow
+            label="Langue anglaise"
+            sub="Interface en English"
+            value={lang === 'en'}
+            onToggle={handleToggleLang}
+          />
         </View>
 
         {/* Actions */}
@@ -388,6 +503,7 @@ export default function ProfileScreen() {
           <ActionRow
             icon="✏️"
             label="Modifier le profil"
+            sub={extra.bio ? 'Bio, niveau fitness...' : 'Pseudo, mensuration, bio...'}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               setEditVisible(true)
@@ -396,7 +512,7 @@ export default function ProfileScreen() {
           <ActionRow
             icon="📊"
             label="Objectif hebdomadaire"
-            badge={weeklyGoal !== null ? `${weeklyGoal} séances` : undefined}
+            badge={goal ? `${goal.value} ${GOAL_TYPE_OPTIONS.find(g => g.type === goal.type)?.unit ?? ''}` : undefined}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               setGoalVisible(true)
@@ -405,6 +521,7 @@ export default function ProfileScreen() {
           <ActionRow
             icon="🔔"
             label="Notifications"
+            sub="Défis, amis, rappels..."
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               setNotifVisible(true)
@@ -413,6 +530,7 @@ export default function ProfileScreen() {
           <ActionRow
             icon="🔒"
             label="Confidentialité"
+            sub="Profil, activités, classement..."
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               setPrivacyVisible(true)
@@ -438,15 +556,17 @@ export default function ProfileScreen() {
         onClose={() => setEditVisible(false)}
         profile={profile}
         unit={unit}
+        extra={extra}
         onSave={updateProfile}
+        onSaveExtra={setExtra}
       />
       <NotificationsModal visible={notifVisible} onClose={() => setNotifVisible(false)} />
       <PrivacyModal visible={privacyVisible} onClose={() => setPrivacyVisible(false)} />
       <PaywallModal visible={paywallVisible} onClose={() => setPaywallVisible(false)} />
       <GoalModal
         visible={goalVisible}
-        current={weeklyGoal}
-        onSave={n => { setGoal(n); setGoalVisible(false) }}
+        current={goal}
+        onSave={config => { setGoal(config); setGoalVisible(false) }}
         onClear={() => { clearGoal(); setGoalVisible(false) }}
         onClose={() => setGoalVisible(false)}
       />
@@ -456,17 +576,38 @@ export default function ProfileScreen() {
 
 // ── Sub-components ────────────────────────────────────────────
 
-function ActionRow({ icon, label, badge, onPress }: { icon: string; label: string; badge?: string; onPress: () => void }) {
+function ActionRow({ icon, label, sub, badge, onPress }: {
+  icon: string; label: string; sub?: string; badge?: string; onPress: () => void
+}) {
   return (
     <TouchableOpacity style={actionStyles.row} onPress={onPress} activeOpacity={0.7}>
       <Text style={actionStyles.icon}>{icon}</Text>
-      <Text style={actionStyles.label}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={actionStyles.label}>{label}</Text>
+        {sub && <Text style={actionStyles.sub}>{sub}</Text>}
+      </View>
       {badge && (
         <View style={actionStyles.badge}>
           <Text style={actionStyles.badgeText}>{badge}</Text>
         </View>
       )}
       <Text style={actionStyles.chevron}>›</Text>
+    </TouchableOpacity>
+  )
+}
+
+function ToggleRow({ label, sub, value, onToggle }: {
+  label: string; sub?: string; value: boolean; onToggle: () => void
+}) {
+  return (
+    <TouchableOpacity style={toggleRowStyles.row} onPress={onToggle} activeOpacity={0.7}>
+      <View style={{ flex: 1 }}>
+        <Text style={toggleRowStyles.label}>{label}</Text>
+        {sub && <Text style={toggleRowStyles.sub}>{sub}</Text>}
+      </View>
+      <View style={[toggleStyles.track, value && toggleStyles.trackOn]}>
+        <View style={[toggleStyles.thumb, value && toggleStyles.thumbOn]} />
+      </View>
     </TouchableOpacity>
   )
 }
@@ -497,38 +638,107 @@ function GoalModal({
   visible, current, onSave, onClear, onClose,
 }: {
   visible: boolean
-  current: number | null
-  onSave: (n: number) => void
+  current: GoalConfig | null
+  onSave: (config: GoalConfig) => void
   onClear: () => void
   onClose: () => void
 }) {
+  const [selectedType, setSelectedType] = useState<GoalType>(current?.type ?? 'sessions')
+  const [customVal, setCustomVal] = useState('')
+
+  useEffect(() => {
+    if (visible) {
+      setSelectedType(current?.type ?? 'sessions')
+      setCustomVal('')
+    }
+  }, [visible, current])
+
+  const typeInfo = GOAL_TYPE_OPTIONS.find(g => g.type === selectedType)!
+
+  const handleCustomSave = () => {
+    const v = parseInt(customVal)
+    if (!isNaN(v) && v > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      onSave({ type: selectedType, value: v })
+    }
+  }
+
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={sheetStyles.overlay}>
         <TouchableOpacity style={sheetStyles.backdrop} onPress={onClose} activeOpacity={1} />
         <View style={sheetStyles.sheet}>
           <View style={sheetStyles.handle} />
-          <Text style={sheetStyles.sheetTitle}>🎯  Objectif hebdomadaire</Text>
-          <Text style={[sheetStyles.note, { textAlign: 'left', marginBottom: Spacing.xs }]}>
-            Combien de séances veux-tu faire par semaine ?
-          </Text>
-          <View style={goalModalStyles.grid}>
-            {GOAL_OPTIONS.map(n => (
+          <Text style={sheetStyles.sheetTitle}>🎯 Objectif hebdomadaire</Text>
+
+          {/* Type selector */}
+          <View style={goalModalStyles.typeRow}>
+            {GOAL_TYPE_OPTIONS.map(opt => (
               <TouchableOpacity
-                key={n}
-                style={[goalModalStyles.option, current === n && goalModalStyles.optionActive]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSave(n) }}
+                key={opt.type}
+                style={[goalModalStyles.typeChip, selectedType === opt.type && goalModalStyles.typeChipActive]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSelectedType(opt.type) }}
                 activeOpacity={0.75}
               >
-                <Text style={[goalModalStyles.optionNum, current === n && goalModalStyles.optionNumActive]}>
-                  {n}
-                </Text>
-                <Text style={[goalModalStyles.optionLabel, current === n && goalModalStyles.optionLabelActive]}>
-                  séance{n > 1 ? 's' : ''}
+                <Text style={goalModalStyles.typeEmoji}>{opt.emoji}</Text>
+                <Text style={[goalModalStyles.typeLabel, selectedType === opt.type && goalModalStyles.typeLabelActive]}>
+                  {opt.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+
+          <Text style={[sheetStyles.note, { textAlign: 'left', marginBottom: 0 }]}>
+            {typeInfo.unit} par semaine
+          </Text>
+
+          {/* Value grid */}
+          <View style={goalModalStyles.grid}>
+            {GOAL_VALUES[selectedType].map(n => (
+              <TouchableOpacity
+                key={n}
+                style={[
+                  goalModalStyles.option,
+                  current?.type === selectedType && current?.value === n && goalModalStyles.optionActive,
+                ]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onSave({ type: selectedType, value: n }) }}
+                activeOpacity={0.75}
+              >
+                <Text style={[
+                  goalModalStyles.optionNum,
+                  current?.type === selectedType && current?.value === n && goalModalStyles.optionNumActive,
+                ]}>
+                  {n}
+                </Text>
+                <Text style={[
+                  goalModalStyles.optionLabel,
+                  current?.type === selectedType && current?.value === n && goalModalStyles.optionLabelActive,
+                ]}>
+                  {typeInfo.unit}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Custom value */}
+          <View style={goalModalStyles.customRow}>
+            <TextInput
+              style={goalModalStyles.customInput}
+              value={customVal}
+              onChangeText={setCustomVal}
+              placeholder={`Valeur personnalisée (${typeInfo.unit})`}
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity
+              style={goalModalStyles.customBtn}
+              onPress={handleCustomSave}
+              activeOpacity={0.8}
+            >
+              <Text style={goalModalStyles.customBtnText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+
           {current !== null && (
             <TouchableOpacity onPress={onClear} style={sheetStyles.cancelWrap} activeOpacity={0.7}>
               <Text style={[sheetStyles.cancelText, { color: Colors.error }]}>Supprimer l'objectif</Text>
@@ -544,17 +754,21 @@ function GoalModal({
 // ── Edit Profile Modal ────────────────────────────────────────
 
 function EditProfileModal({
-  visible, onClose, profile, unit, onSave,
+  visible, onClose, profile, unit, extra, onSave, onSaveExtra,
 }: {
   visible: boolean
   onClose: () => void
   profile: Profile | null
   unit: PreferredUnit
+  extra: { bio: string; fitnessLevel: string }
   onSave: (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => Promise<void>
+  onSaveExtra: (update: { bio?: string; fitnessLevel?: string }) => Promise<void>
 }) {
   const [username, setUsername] = useState('')
   const [heightInput, setHeightInput] = useState('')
   const [weightInput, setWeightInput] = useState('')
+  const [bio, setBio] = useState('')
+  const [fitnessLevel, setFitnessLevel] = useState('')
   const [saving, setSaving] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -563,9 +777,11 @@ function EditProfileModal({
       setUsername(profile.username ?? '')
       setHeightInput(profile.height_cm ? String(profile.height_cm) : '')
       setWeightInput(profile.current_weight_kg ? String(profile.current_weight_kg) : '')
+      setBio(extra.bio)
+      setFitnessLevel(extra.fitnessLevel)
       setErrorMsg(null)
     }
-  }, [visible, profile])
+  }, [visible, profile, extra])
 
   const handleSave = async () => {
     setErrorMsg(null)
@@ -573,11 +789,14 @@ function EditProfileModal({
     if (username.trim().length < 3) { setErrorMsg('Min. 3 caractères pour le pseudo.'); return }
     setSaving(true)
     try {
-      await onSave({
-        username: username.trim(),
-        height_cm: heightInput ? parseFloat(heightInput) || undefined : undefined,
-        current_weight_kg: weightInput ? parseFloat(weightInput) || undefined : undefined,
-      })
+      await Promise.all([
+        onSave({
+          username: username.trim(),
+          height_cm: heightInput ? parseFloat(heightInput) || undefined : undefined,
+          current_weight_kg: weightInput ? parseFloat(weightInput) || undefined : undefined,
+        }),
+        onSaveExtra({ bio: bio.trim(), fitnessLevel }),
+      ])
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       onClose()
     } catch (e: any) {
@@ -594,7 +813,7 @@ function EditProfileModal({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <TouchableOpacity style={sheetStyles.backdrop} onPress={onClose} activeOpacity={1} />
-        <View style={sheetStyles.sheet}>
+        <ScrollView style={sheetStyles.sheetScroll} contentContainerStyle={sheetStyles.sheetScrollContent}>
           <View style={sheetStyles.handle} />
           <Text style={sheetStyles.sheetTitle}>Modifier le profil</Text>
 
@@ -611,6 +830,42 @@ function EditProfileModal({
             placeholder="ton_pseudo"
             autoCapitalize="none"
           />
+
+          {/* Bio */}
+          <View style={sheetStyles.fieldWrap}>
+            <Text style={sheetStyles.fieldLabel}>Bio</Text>
+            <TextInput
+              style={[sheetStyles.fieldInput, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]}
+              value={bio}
+              onChangeText={t => setBio(t.slice(0, 150))}
+              placeholder="Une phrase sur toi... (150 chars max)"
+              placeholderTextColor={Colors.textTertiary}
+              multiline
+              numberOfLines={3}
+            />
+            <Text style={sheetStyles.charCount}>{bio.length}/150</Text>
+          </View>
+
+          {/* Fitness level */}
+          <View style={sheetStyles.fieldWrap}>
+            <Text style={sheetStyles.fieldLabel}>Niveau fitness</Text>
+            <View style={editStyles.levelRow}>
+              {FITNESS_LEVELS.map(fl => (
+                <TouchableOpacity
+                  key={fl.key}
+                  style={[editStyles.levelChip, fitnessLevel === fl.key && editStyles.levelChipActive]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFitnessLevel(fl.key) }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={editStyles.levelEmoji}>{fl.emoji}</Text>
+                  <Text style={[editStyles.levelLabel, fitnessLevel === fl.key && editStyles.levelLabelActive]}>
+                    {fl.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <SheetField
             label={`Taille (${unit === 'metric' ? 'cm' : 'in'})`}
             value={heightInput}
@@ -637,7 +892,7 @@ function EditProfileModal({
           <TouchableOpacity onPress={onClose} style={sheetStyles.cancelWrap} activeOpacity={0.7}>
             <Text style={sheetStyles.cancelText}>Annuler</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   )
@@ -645,22 +900,15 @@ function EditProfileModal({
 
 // ── Notifications Modal ───────────────────────────────────────
 
-const NOTIF_SETTINGS = [
-  { id: 'new_challenges', title: 'Nouveaux défis', subtitle: 'Quand un défi hebdomadaire est disponible', default: true },
-  { id: 'friend_activity', title: 'Activités des amis', subtitle: 'Quand un ami ajoute une séance', default: true },
-  { id: 'reminders', title: "Rappels d'entraînement", subtitle: "Un rappel si tu n'as pas bougé depuis 3 jours", default: false },
-  { id: 'weekly_summary', title: 'Résumé hebdomadaire', subtitle: 'Ton bilan sportif chaque lundi matin', default: true },
+const NOTIF_SETTINGS_DEF = [
+  { id: 'new_challenges', title: 'Nouveaux défis', subtitle: 'Quand un défi hebdomadaire est disponible' },
+  { id: 'friend_activity', title: 'Activités des amis', subtitle: 'Quand un ami ajoute une séance' },
+  { id: 'reminders', title: "Rappels d'entraînement", subtitle: "Un rappel si tu n'as pas bougé depuis 3 jours" },
+  { id: 'weekly_summary', title: 'Résumé hebdomadaire', subtitle: 'Ton bilan sportif chaque lundi matin' },
 ]
 
 function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [settings, setSettings] = useState<Record<string, boolean>>(
-    Object.fromEntries(NOTIF_SETTINGS.map(s => [s.id, s.default])),
-  )
-
-  const toggle = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    setSettings(prev => ({ ...prev, [id]: !prev[id] }))
-  }
+  const { settings, toggle } = useNotifSettings()
 
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -670,21 +918,15 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
           <View style={sheetStyles.handle} />
           <Text style={sheetStyles.sheetTitle}>🔔  Notifications</Text>
 
-          {NOTIF_SETTINGS.map((s, i) => (
+          {NOTIF_SETTINGS_DEF.map((s, i) => (
             <React.Fragment key={s.id}>
-              <View style={sheetStyles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={sheetStyles.settingTitle}>{s.title}</Text>
-                  <Text style={sheetStyles.settingSub}>{s.subtitle}</Text>
-                </View>
-                <Switch
-                  value={settings[s.id]}
-                  onValueChange={() => toggle(s.id)}
-                  trackColor={{ false: Colors.border, true: Colors.electricDim }}
-                  thumbColor={settings[s.id] ? Colors.electric : '#fff'}
-                />
-              </View>
-              {i < NOTIF_SETTINGS.length - 1 && <View style={sheetStyles.divider} />}
+              <ToggleRow
+                label={s.title}
+                sub={s.subtitle}
+                value={settings[s.id] ?? NOTIF_DEFAULTS[s.id]}
+                onToggle={() => toggle(s.id)}
+              />
+              {i < NOTIF_SETTINGS_DEF.length - 1 && <View style={sheetStyles.divider} />}
             </React.Fragment>
           ))}
 
@@ -700,22 +942,15 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
 
 // ── Privacy Modal ─────────────────────────────────────────────
 
-const PRIVACY_SETTINGS = [
-  { id: 'public_profile', title: 'Profil public', subtitle: 'Visible par tous les utilisateurs', default: true },
-  { id: 'show_activities', title: 'Activités publiques', subtitle: 'Tes séances dans le feed de tes amis', default: true },
-  { id: 'show_leaderboard', title: 'Classement', subtitle: "Ton score visible dans l'Arène", default: true },
-  { id: 'show_body_metrics', title: 'Métriques corporelles', subtitle: 'Partager poids et IMC', default: false },
+const PRIVACY_SETTINGS_DEF = [
+  { id: 'public_profile', title: 'Profil public', subtitle: 'Visible par tous les utilisateurs' },
+  { id: 'show_activities', title: 'Activités publiques', subtitle: 'Tes séances dans le feed de tes amis' },
+  { id: 'show_leaderboard', title: 'Classement', subtitle: "Ton score visible dans l'Arène" },
+  { id: 'show_body_metrics', title: 'Métriques corporelles', subtitle: 'Partager poids et IMC' },
 ]
 
 function PrivacyModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [settings, setSettings] = useState<Record<string, boolean>>(
-    Object.fromEntries(PRIVACY_SETTINGS.map(s => [s.id, s.default])),
-  )
-
-  const toggle = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    setSettings(prev => ({ ...prev, [id]: !prev[id] }))
-  }
+  const { settings, toggle } = usePrivacySettings()
 
   return (
     <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -725,21 +960,15 @@ function PrivacyModal({ visible, onClose }: { visible: boolean; onClose: () => v
           <View style={sheetStyles.handle} />
           <Text style={sheetStyles.sheetTitle}>🔒  Confidentialité</Text>
 
-          {PRIVACY_SETTINGS.map((s, i) => (
+          {PRIVACY_SETTINGS_DEF.map((s, i) => (
             <React.Fragment key={s.id}>
-              <View style={sheetStyles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={sheetStyles.settingTitle}>{s.title}</Text>
-                  <Text style={sheetStyles.settingSub}>{s.subtitle}</Text>
-                </View>
-                <Switch
-                  value={settings[s.id]}
-                  onValueChange={() => toggle(s.id)}
-                  trackColor={{ false: Colors.border, true: Colors.electricDim }}
-                  thumbColor={settings[s.id] ? Colors.electric : '#fff'}
-                />
-              </View>
-              {i < PRIVACY_SETTINGS.length - 1 && <View style={sheetStyles.divider} />}
+              <ToggleRow
+                label={s.title}
+                sub={s.subtitle}
+                value={settings[s.id] ?? PRIVACY_DEFAULTS[s.id]}
+                onToggle={() => toggle(s.id)}
+              />
+              {i < PRIVACY_SETTINGS_DEF.length - 1 && <View style={sheetStyles.divider} />}
             </React.Fragment>
           ))}
 
@@ -795,7 +1024,18 @@ const styles = StyleSheet.create({
     gap: 6,
     ...Shadow.sm,
   },
+  heroTop: { alignItems: 'center', gap: 4 },
   name: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, letterSpacing: -0.3 },
+  bio: { fontSize: FontSize.sm, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: Spacing.lg, lineHeight: 18 },
+  levelBadge: {
+    backgroundColor: Colors.bgAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  levelText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
   proBadge: {
     backgroundColor: Colors.electricDim,
     paddingHorizontal: 10,
@@ -817,6 +1057,41 @@ const styles = StyleSheet.create({
   actions: { gap: Spacing.sm },
   signOutWrap: { paddingTop: Spacing.sm },
   version: { fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'center', paddingTop: Spacing.sm },
+})
+
+const toggleStyles = StyleSheet.create({
+  track: {
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  trackOn: { backgroundColor: Colors.electric },
+  thumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  thumbOn: { alignSelf: 'flex-end' },
+})
+
+const toggleRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: 8,
+  },
+  label: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
+  sub: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
 })
 
 const scoreStyles = StyleSheet.create({
@@ -880,22 +1155,12 @@ const prefStyles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    gap: 0,
     ...Shadow.sm,
   },
-  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 4 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  rowLast: { borderBottomWidth: 0 },
-  label: { flex: 1 },
-  labelMain: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
-  labelSub: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginBottom: 6, marginTop: 4 },
+  divider: { height: 1, backgroundColor: Colors.borderLight },
 })
 
 const proStyles = StyleSheet.create({
@@ -932,7 +1197,8 @@ const actionStyles = StyleSheet.create({
     ...Shadow.sm,
   },
   icon: { fontSize: 18, width: 24, textAlign: 'center' },
-  label: { flex: 1, fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
+  label: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
+  sub: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
   badge: {
     backgroundColor: Colors.electricDim,
     paddingHorizontal: 8,
@@ -971,22 +1237,37 @@ const goalStyles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     padding: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadow.sm,
+  },
+  top: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
-    ...Shadow.sm,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  left: { flex: 1, gap: 3 },
-  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  sub: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  right: { alignItems: 'center' },
+  typeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.electricDim,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  typeEmoji: { fontSize: 13 },
+  typeLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.electric },
+  valueWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   goalNum: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.electric },
-  goalUnit: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  goalUnit: { fontSize: FontSize.sm, color: Colors.textTertiary },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  bar: { flex: 1, height: 8, backgroundColor: Colors.bgAlt, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 4 },
+  progressLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.electric, minWidth: 50 },
+  emptyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  emptyLeft: { flex: 1, gap: 3 },
+  emptyTitle: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  emptySub: { fontSize: FontSize.xs, color: Colors.textTertiary },
   setLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.electric },
-  barWrap: { width: '100%' },
-  bar: { height: 6, backgroundColor: Colors.bgAlt, borderRadius: 3, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
 })
 
 const achieveStyles = StyleSheet.create({
@@ -1017,13 +1298,49 @@ const achieveStyles = StyleSheet.create({
   badgeDesc: { fontSize: 8, color: Colors.textTertiary, textAlign: 'center' },
 })
 
+const editStyles = StyleSheet.create({
+  levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+  levelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  levelChipActive: { borderColor: Colors.electric, backgroundColor: Colors.electricDim },
+  levelEmoji: { fontSize: 14 },
+  levelLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textSecondary },
+  levelLabelActive: { color: Colors.electric, fontWeight: FontWeight.bold },
+})
+
 const goalModalStyles = StyleSheet.create({
+  typeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.xs },
+  typeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  typeChipActive: { borderColor: Colors.electric, backgroundColor: Colors.electricDim },
+  typeEmoji: { fontSize: 15 },
+  typeLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  typeLabelActive: { color: Colors.electric },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
   option: {
-    flex: 1,
-    minWidth: 80,
+    width: '30%',
+    flexGrow: 1,
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: Radius.md,
     backgroundColor: Colors.bgAlt,
     gap: 2,
@@ -1033,6 +1350,27 @@ const goalModalStyles = StyleSheet.create({
   optionNumActive: { color: Colors.textInverse },
   optionLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
   optionLabelActive: { color: Colors.textInverse },
+  customRow: { flexDirection: 'row', gap: Spacing.sm },
+  customInput: {
+    flex: 1,
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    height: 48,
+    fontSize: FontSize.md,
+    color: Colors.textPrimary,
+  },
+  customBtn: {
+    backgroundColor: Colors.electric,
+    paddingHorizontal: Spacing.md,
+    height: 48,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customBtnText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: '#fff' },
 })
 
 const sheetStyles = StyleSheet.create({
@@ -1042,10 +1380,7 @@ const sheetStyles = StyleSheet.create({
   },
   backdrop: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
@@ -1056,6 +1391,17 @@ const sheetStyles = StyleSheet.create({
     paddingBottom: 40,
     gap: Spacing.md,
     ...Shadow.lg,
+  },
+  sheetScroll: {
+    backgroundColor: Colors.bg,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    maxHeight: '90%',
+  },
+  sheetScrollContent: {
+    padding: Spacing.lg,
+    paddingBottom: 40,
+    gap: Spacing.md,
   },
   handle: {
     width: 40,
@@ -1082,14 +1428,6 @@ const sheetStyles = StyleSheet.create({
   errorText: { fontSize: FontSize.sm, color: Colors.error, fontWeight: FontWeight.medium },
   cancelWrap: { alignSelf: 'center', paddingVertical: Spacing.sm },
   cancelText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.medium },
-  settingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: 4,
-  },
-  settingTitle: { fontSize: FontSize.md, fontWeight: FontWeight.medium, color: Colors.textPrimary },
-  settingSub: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 2 },
   divider: { height: 1, backgroundColor: Colors.borderLight },
   note: {
     fontSize: FontSize.xs,
@@ -1111,4 +1449,5 @@ const sheetStyles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   fieldInputFocused: { borderColor: Colors.electric },
+  charCount: { fontSize: FontSize.xs, color: Colors.textTertiary, textAlign: 'right' },
 })

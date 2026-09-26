@@ -38,7 +38,7 @@ export default function StatsScreen() {
 
       {/* Tab bar */}
       <View style={styles.tabBar}>
-        {([['overview', 'Aperçu'], ['body', 'Corps'], ['sport', 'Sport']] as [Tab, string][]).map(([key, label]) => (
+        {([['overview', '📊 Aperçu'], ['body', '⚖️ Corps'], ['sport', '🎯 Sport']] as [Tab, string][]).map(([key, label]) => (
           <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.tabActive]} onPress={() => setTab(key)}>
             <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
           </TouchableOpacity>
@@ -119,6 +119,12 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
 
       {/* Weekly volume chart */}
       {total > 0 && <WeeklyVolumeChart activities={activities} />}
+
+      {/* Weekly duration chart */}
+      {total > 0 && <WeeklyDurationChart activities={activities} />}
+
+      {/* Personal records */}
+      {total > 0 && <PersonalRecords activities={activities} />}
     </>
   )
 }
@@ -149,6 +155,86 @@ function WeeklyVolumeChart({ activities }: any) {
         style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
         fromZero
       />
+    </View>
+  )
+}
+
+function WeeklyDurationChart({ activities }: any) {
+  const byWeek: Record<string, number> = {}
+  for (const a of activities) {
+    const d = new Date(a.created_at)
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    const key = `${monday.getDate()}/${monday.getMonth() + 1}`
+    byWeek[key] = (byWeek[key] ?? 0) + Math.round(a.duration_seconds / 60)
+  }
+  const keys = Object.keys(byWeek).slice(-6)
+  const vals = keys.map(k => byWeek[k])
+  if (keys.length < 2) return null
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>Durée par semaine (min)</Text>
+      <BarChart
+        data={{ labels: keys, datasets: [{ data: vals }] }}
+        width={CHART_W}
+        height={120}
+        yAxisLabel="" yAxisSuffix=" min"
+        chartConfig={{ ...chartCfg(), color: (o = 1) => `rgba(139,92,246,${o})` }}
+        withInnerLines={false} showBarTops={false}
+        style={{ marginLeft: -Spacing.md, marginBottom: -Spacing.sm }}
+        fromZero
+      />
+    </View>
+  )
+}
+
+function PersonalRecords({ activities }: any) {
+  const records: { label: string; value: string; emoji: string }[] = []
+
+  const longestSession = activities.reduce((best: any, a: any) =>
+    a.duration_seconds > (best?.duration_seconds ?? 0) ? a : best, null)
+  if (longestSession) {
+    records.push({
+      emoji: '⏱',
+      label: 'Séance la + longue',
+      value: formatDurationLong(longestSession.duration_seconds),
+    })
+  }
+
+  const bestDistance = activities
+    .map((a: any) => ({ a, dist: (a.metrics?.distance_m ?? 0) }))
+    .sort((x: any, y: any) => y.dist - x.dist)[0]
+  if (bestDistance?.dist > 0) {
+    records.push({
+      emoji: '📍',
+      label: 'Meilleure distance',
+      value: `${(bestDistance.dist / 1000).toFixed(1)} km`,
+    })
+  }
+
+  const sportSet = new Set(activities.map((a: any) => a.sport_type))
+  records.push({ emoji: '🎯', label: 'Sports pratiqués', value: String(sportSet.size) })
+
+  const totalCal = activities.reduce((s: number, a: any) => s + (a.calories_burned ?? 0), 0)
+  if (totalCal > 0) {
+    records.push({ emoji: '🔥', label: 'Total calories', value: `${Math.round(totalCal).toLocaleString('fr-FR')} kcal` })
+  }
+
+  if (records.length === 0) return null
+
+  return (
+    <View style={card.box}>
+      <Text style={card.title}>Records personnels</Text>
+      <View style={prStyles.grid}>
+        {records.map((r, i) => (
+          <View key={i} style={prStyles.item}>
+            <Text style={prStyles.emoji}>{r.emoji}</Text>
+            <Text style={prStyles.value}>{r.value}</Text>
+            <Text style={prStyles.label}>{r.label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   )
 }
@@ -364,6 +450,22 @@ const breakdown = StyleSheet.create({
   barBg: { flex: 1, height: 8, backgroundColor: Colors.bgAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
   pct: { width: 32, fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'right' },
+})
+
+const prStyles = StyleSheet.create({
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  item: {
+    minWidth: '45%',
+    flex: 1,
+    backgroundColor: Colors.bgAlt,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    alignItems: 'center',
+    gap: 2,
+  },
+  emoji: { fontSize: 20 },
+  value: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary, textAlign: 'center' },
+  label: { fontSize: 10, color: Colors.textTertiary, textAlign: 'center' },
 })
 
 const calStyles = StyleSheet.create({
