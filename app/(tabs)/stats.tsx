@@ -13,6 +13,8 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit'
 import { ScreenHeader } from '@/components/ui/ScreenHeader'
 import { HeatmapView } from '@/components/lab/HeatmapView'
 import { SportStatsTab } from '@/components/lab/SportStatsTab'
+import { SkillsRadar } from '@/components/ui/SkillsRadar'
+import { useSkills } from '@/hooks/useSkills'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { useBodyLogs } from '@/hooks/useBodyLogs'
 import { useActivities } from '@/hooks/useActivities'
@@ -38,7 +40,7 @@ const PERIODS: { v: Period; l: string }[] = [
 
 const TAB_KEYS: Tab[] = ['overview', 'body', 'sport']
 
-export default function StatsScreen() {
+export default function StatsScreen({ embedded = false }: { embedded?: boolean }) {
   const { userId } = useSession()
   const { profile } = useProfile(userId ?? undefined)
   const [tab, setTab] = useState<Tab>('overview')
@@ -90,7 +92,7 @@ export default function StatsScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Labo" />
+      {!embedded && <ScreenHeader title="Labo" />}
 
       {/* Tab bar with sliding indicator */}
       <View
@@ -169,6 +171,7 @@ export default function StatsScreen() {
 
 function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, totalDurationSeconds }: any) {
   const total = activities.length
+  const skills = useSkills(activities)
 
   return (
     <>
@@ -178,6 +181,9 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
         <KpiCard icon="⏱"  label="Durée totale" value={formatDurationLong(totalDurationSeconds)} accent="#8B5CF6" />
         <KpiCard icon="🔥" label="kcal"          value={totalCalories > 0 ? `${(totalCalories / 1000).toFixed(1)}k` : '—'} accent="#F97316" />
       </View>
+
+      {/* RPG Skills radar */}
+      <SkillsRadar skills={skills} />
 
       {/* Swipe hint */}
       <View style={styles.swipeHint}>

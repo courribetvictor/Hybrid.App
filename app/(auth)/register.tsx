@@ -17,16 +17,20 @@ import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
-
-type SportType = 'running' | 'cycling' | 'swimming' | 'gym' | 'badminton' | 'athletics'
+import type { SportType } from '@/types/database'
 
 const SPORTS: { type: SportType; emoji: string; label: string }[] = [
-  { type: 'running', emoji: '🏃', label: 'Course' },
-  { type: 'cycling', emoji: '🚴', label: 'Vélo' },
-  { type: 'swimming', emoji: '🏊', label: 'Natation' },
-  { type: 'gym', emoji: '🏋️', label: 'Muscu' },
+  { type: 'running',   emoji: '🏃', label: 'Course' },
+  { type: 'cycling',   emoji: '🚴', label: 'Vélo' },
+  { type: 'swimming',  emoji: '🏊', label: 'Natation' },
+  { type: 'gym',       emoji: '🏋️', label: 'Muscu' },
   { type: 'badminton', emoji: '🏸', label: 'Badminton' },
   { type: 'athletics', emoji: '⚡', label: 'Athlé' },
+  { type: 'football',  emoji: '⚽', label: 'Football' },
+  { type: 'tennis',    emoji: '🎾', label: 'Tennis' },
+  { type: 'hiking',    emoji: '🥾', label: 'Rando' },
+  { type: 'yoga',      emoji: '🧘', label: 'Yoga' },
+  { type: 'boxing',    emoji: '🥊', label: 'Boxe' },
 ]
 
 export default function RegisterScreen() {
@@ -79,19 +83,18 @@ export default function RegisterScreen() {
       return
     }
 
-    // Patch username on profile row (created by DB trigger)
+    // Patch username + favorite_sports on profile row (created by DB trigger)
     if (data.user) {
-      await supabase
+      await (supabase as any)
         .from('profiles')
-        .update({ username: username.trim() })
+        .update({ username: username.trim(), favorite_sports: favSports })
         .eq('id', data.user.id)
     }
 
     setLoading(false)
 
     if (data.session) {
-      // Session immédiate (confirmation email désactivée) → auth guard redirige
-      // Pas besoin de router.replace ici, _layout.tsx s'en charge via onAuthStateChange
+      // Session immédiate (confirmation email désactivée) → _layout.tsx redirige via onAuthStateChange
     } else {
       // Confirmation email requise
       setEmailSent(true)

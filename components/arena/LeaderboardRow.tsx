@@ -8,40 +8,52 @@ interface LeaderboardRowProps {
   entry: LeaderboardEntry
   rank: number
   isCurrentUser?: boolean
+  weeklySeconds?: number
+  weeklySessions?: number
 }
 
 const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
 
-export function LeaderboardRow({ entry, rank, isCurrentUser = false }: LeaderboardRowProps) {
+export function LeaderboardRow({
+  entry, rank, isCurrentUser = false, weeklySeconds, weeklySessions,
+}: LeaderboardRowProps) {
   const medal = MEDAL[rank]
+  const showWeekly = weeklySeconds !== undefined
+
+  const weeklyLabel = showWeekly
+    ? (() => {
+        const h = Math.floor((weeklySeconds ?? 0) / 3600)
+        const m = Math.floor(((weeklySeconds ?? 0) % 3600) / 60)
+        const dur = h > 0 ? `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}` : `${m}min`
+        return `${weeklySessions} séance${(weeklySessions ?? 0) > 1 ? 's' : ''} · ${dur}`
+      })()
+    : null
 
   return (
     <View style={[styles.row, isCurrentUser && styles.rowHighlight]}>
-      {/* Rank */}
       <View style={styles.rankBox}>
         {medal ? (
           <Text style={styles.medal}>{medal}</Text>
         ) : (
-          <Text style={[styles.rankNum, isCurrentUser && styles.rankNumActive]}>
-            {rank}
-          </Text>
+          <Text style={[styles.rankNum, isCurrentUser && styles.rankNumActive]}>{rank}</Text>
         )}
       </View>
 
-      <Avatar
-        uri={entry.avatar_url}
-        username={entry.username}
-        isPro={entry.is_pro}
-        size={38}
-      />
+      <Avatar uri={entry.avatar_url} username={entry.username} isPro={entry.is_pro} size={38} />
 
-      <Text style={[styles.username, isCurrentUser && styles.usernameActive]} numberOfLines={1}>
-        {entry.username}
-        {isCurrentUser ? ' (vous)' : ''}
-      </Text>
+      <View style={styles.nameCol}>
+        <Text style={[styles.username, isCurrentUser && styles.usernameActive]} numberOfLines={1}>
+          {entry.username}{isCurrentUser ? ' (vous)' : ''}
+        </Text>
+        {weeklyLabel ? (
+          <Text style={styles.weeklyLabel}>{weeklyLabel}</Text>
+        ) : null}
+      </View>
 
       <Text style={[styles.score, isCurrentUser && styles.scoreActive]}>
-        {Math.round(entry.hybrid_score).toLocaleString()}
+        {showWeekly
+          ? `${Math.floor((weeklySeconds ?? 0) / 60)}min`
+          : Math.round(entry.hybrid_score).toLocaleString()}
       </Text>
     </View>
   )
@@ -74,11 +86,15 @@ const styles = StyleSheet.create({
   rankNumActive: {
     color: Colors.electric,
   },
+  nameCol: { flex: 1, gap: 2 },
   username: {
-    flex: 1,
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
     color: Colors.textPrimary,
+  },
+  weeklyLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
   },
   usernameActive: {
     fontWeight: FontWeight.bold,

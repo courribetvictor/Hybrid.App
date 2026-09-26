@@ -71,7 +71,7 @@ export default function FeedScreen() {
   const { following } = useFollows(userId ?? undefined)
   const followingIds = useMemo(() => following.map(f => f.userId), [following])
   const { feed: activityFeed, loading: actLoading, refetch: refetchActs } = useFriendFeed(friendIds)
-  const { activities: ownActivities, refetch: refetchOwn } = useActivities(userId ?? undefined, 7)
+  const { activities: ownActivities, refetch: refetchOwn } = useActivities(userId ?? undefined, 365)
   const { goal } = useWeeklyGoal()
   const { posts, loading: postLoading, createPost, toggleLike, deletePost, refetch: refetchPosts } =
     usePostFeed(userId ?? undefined, followingIds)
@@ -151,9 +151,20 @@ export default function FeedScreen() {
 
   const loading = actLoading || postLoading
 
+  const weekActivities = useMemo(() => {
+    const monday = new Date()
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+    monday.setHours(0, 0, 0, 0)
+    return (ownActivities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+  }, [ownActivities])
+
+  // Streak computed over 365 days (not just this week)
+  const streak = useMemo(() => computeStreak(ownActivities as Activity[]), [ownActivities])
+
   const header = (
     <>
-      <WeekSummaryBanner activities={ownActivities} goal={goal} />
+      <MiniCalendar activities={ownActivities as Activity[]} />
+      <WeekSummaryBanner activities={weekActivities} goal={goal} streak={streak} />
       {/* Post bar — compact, minimal */}
       <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.85}>
         <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={28} />
@@ -166,13 +177,13 @@ export default function FeedScreen() {
   return (
     <View style={styles.safe}>
       <ScreenHeader
-        title="Feed"
+        title="Accueil"
         right={
           <>
             <HeaderIconBtn icon="🔍" onPress={() => {}} />
             <HeaderIconBtn icon="🔔" badge />
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => router.push('/vous' as any)}
               activeOpacity={0.8}
               style={{ marginLeft: 2 }}
             >
@@ -213,7 +224,111 @@ export default function FeedScreen() {
         visible={postModalVisible}
         onClose={() => setPostModalVisible(false)}
         onSubmit={createPost}
+        userId={userId ?? undefined}
       />
+    </View>
+  )
+}
+
+// ── Mini-calendar ─────────────────────────────────────────────
+
+const CAL_DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+const MONTHS_FR = [
+  'Janvier','Février','Mars','Avril','Mai','Juin',
+  'Juillet','Août','Septembre','Octobre','Novembre','Décembre',
+]
+
+function MiniCalendar({ activities }: { activities: Activity[] }) {
+  const today = new Date()
+  const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
+
+  // Set of YYYY-MM-DD strings with activities
+  const activeDays = useMemo(() => {
+    const map: Record<string, SportType> = {}
+    for (const a of activities) {
+      const d = a.created_at.split('T')[0]
+      if (!map[d]) map[d] = a.sport_type
+    }
+    return map
+  }, [activities])
+
+  const year = month.getFullYear()
+  const mon  = month.getMonth()
+  const daysInMonth = new Date(year, mon + 1, 0).getDate()
+  // Monday-based offset: getDay() returns 0=Sun so (0+6)%7=6, 1=Mon→0, etc.
+  const firstDayOffset = (new Date(year, mon, 1).getDay() + 6) % 7
+
+  const cells: (number | null)[] = [
+    ...Array(firstDayOffset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  // Pad to full rows
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const todayStr = today.toISOString().split('T')[0]
+
+  const prevMonth = () => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+  const nextMonth = () => {
+    const next = new Date(month.getFullYear(), month.getMonth() + 1, 1)
+    if (next <= new Date(today.getFullYear(), today.getMonth(), 1)) setMonth(next)
+  }
+  const isCurrentMonth = year === today.getFullYear() && mon === today.getMonth()
+
+  return (
+    <View style={calStyles.card}>
+      {/* Header */}
+      <View style={calStyles.header}>
+        <TouchableOpacity onPress={prevMonth} style={calStyles.navBtn} activeOpacity={0.7}>
+          <Text style={calStyles.navIcon}>‹</Text>
+        </TouchableOpacity>
+        <Text style={calStyles.title}>{MONTHS_FR[mon]} {year}</Text>
+        <TouchableOpacity
+          onPress={nextMonth}
+          style={[calStyles.navBtn, isCurrentMonth && calStyles.navBtnDisabled]}
+          activeOpacity={isCurrentMonth ? 1 : 0.7}
+        >
+          <Text style={[calStyles.navIcon, isCurrentMonth && { opacity: 0.25 }]}>›</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Day-of-week labels */}
+      <View style={calStyles.weekRow}>
+        {CAL_DAYS.map((d, i) => (
+          <Text key={i} style={calStyles.weekLabel}>{d}</Text>
+        ))}
+      </View>
+
+      {/* Grid */}
+      <View style={calStyles.grid}>
+        {cells.map((day, i) => {
+          if (!day) return <View key={`e${i}`} style={calStyles.cell} />
+          const dateStr = `${year}-${String(mon + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const sport = activeDays[dateStr]
+          const hasActivity = !!sport
+          const isToday = dateStr === todayStr
+          const accent = sport ? SportColors[sport] : Colors.electric
+          return (
+            <View key={dateStr} style={calStyles.cell}>
+              <View style={[
+                calStyles.dayInner,
+                hasActivity && { backgroundColor: accent + '22' },
+                isToday && calStyles.todayRing,
+              ]}>
+                {hasActivity && (
+                  <View style={[calStyles.dot, { backgroundColor: accent }]} />
+                )}
+                <Text style={[
+                  calStyles.dayNum,
+                  isToday && calStyles.dayNumToday,
+                  hasActivity && { color: accent, fontWeight: FontWeight.bold },
+                ]}>
+                  {day}
+                </Text>
+              </View>
+            </View>
+          )
+        })}
+      </View>
     </View>
   )
 }
@@ -261,9 +376,11 @@ function computeGoalProgress(goal: GoalConfig, activities: Activity[]): { curren
 function WeekSummaryBanner({
   activities,
   goal,
+  streak,
 }: {
   activities: Activity[]
   goal: GoalConfig | null
+  streak: number
 }) {
   const now = new Date()
   const dayOfWeek = now.getDay()
@@ -303,28 +420,40 @@ function WeekSummaryBanner({
   const mins = Math.floor((totalSecs % 3600) / 60)
   const durationStr = hours > 0 ? `${hours}h${mins > 0 ? String(mins).padStart(2, '0') : ''}` : `${mins}min`
 
-  const streak = useMemo(() => computeStreak(activities), [activities])
-
   const goalResult = goal ? computeGoalProgress(goal, activities) : null
   const goalProgress = goalResult?.progress ?? null
 
   return (
     <View style={bannerStyles.card}>
-      {/* Top row: title + streak + stats chips */}
+      {/* Top row: title + stats + streak badge */}
       <View style={bannerStyles.top}>
-        <Text style={bannerStyles.label}>Cette semaine</Text>
-        <View style={bannerStyles.topRight}>
+        <View style={bannerStyles.topLeft}>
+          <Text style={bannerStyles.label}>Cette semaine</Text>
           {sessions > 0 && (
             <Text style={bannerStyles.statInline}>
               {sessions} séance{sessions > 1 ? 's' : ''} · {durationStr}
+              {totalCal > 0 ? ` · ${totalCal} kcal` : ''}
             </Text>
           )}
-          {streak > 0 && (
-            <View style={bannerStyles.streakChip}>
-              <Text style={bannerStyles.streakText}>🔥 {streak}</Text>
-            </View>
-          )}
         </View>
+        {streak > 0 && (
+          <View style={[
+            bannerStyles.streakBadge,
+            streak >= 30 && bannerStyles.streakBadgeGold,
+            streak >= 7  && streak < 30 && bannerStyles.streakBadgeSilver,
+          ]}>
+            <Text style={bannerStyles.streakEmoji}>
+              {streak >= 30 ? '🔥🔥🔥' : streak >= 14 ? '🔥🔥' : '🔥'}
+            </Text>
+            <Text style={[
+              bannerStyles.streakCount,
+              streak >= 30 && { color: '#B45309' },
+            ]}>
+              {streak}
+            </Text>
+            <Text style={bannerStyles.streakDays}>jour{streak > 1 ? 's' : ''}</Text>
+          </View>
+        )}
       </View>
 
       {/* Days strip — compact */}
@@ -435,10 +564,9 @@ const bannerStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  topRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  topLeft: {
+    flex: 1,
+    gap: 2,
   },
   label: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   statInline: {
@@ -446,15 +574,39 @@ const bannerStyles = StyleSheet.create({
     color: Colors.textTertiary,
     fontWeight: FontWeight.medium,
   },
-  streakChip: {
+  streakBadge: {
+    alignItems: 'center',
     backgroundColor: '#FFF7ED',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#FB923C',
+    minWidth: 52,
+    gap: 1,
   },
-  streakText: { fontSize: 11, fontWeight: FontWeight.bold, color: '#C2410C' },
+  streakBadgeSilver: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  streakBadgeGold: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#D97706',
+  },
+  streakEmoji: { fontSize: 16, lineHeight: 20 },
+  streakCount: {
+    fontSize: 22,
+    fontWeight: FontWeight.extrabold,
+    color: '#EA580C',
+    lineHeight: 26,
+  },
+  streakDays: {
+    fontSize: 9,
+    fontWeight: FontWeight.semibold,
+    color: '#C2410C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   days: { flexDirection: 'row', gap: 4 },
   dayWrap: {
     flex: 1,
@@ -490,6 +642,68 @@ const bannerStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   goalBarFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
+})
+
+const calStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    paddingBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
+    ...Shadow.sm,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
+  navBtn: { padding: 4 },
+  navBtnDisabled: {},
+  navIcon: { fontSize: 22, color: Colors.electric, fontWeight: FontWeight.bold, lineHeight: 24 },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  weekLabel: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textTertiary,
+  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  cell: {
+    width: `${100 / 7}%` as any,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 1,
+  },
+  dayInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  todayRing: {
+    borderWidth: 1.5,
+    borderColor: Colors.electric,
+  },
+  dot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  dayNum: { fontSize: 11, color: Colors.textSecondary, fontWeight: FontWeight.medium },
+  dayNumToday: { color: Colors.electric, fontWeight: FontWeight.extrabold },
 })
 
 const emptyStyles = StyleSheet.create({

@@ -17,6 +17,7 @@ import { useActivities } from '@/hooks/useActivities'
 import { useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
 import type { SportType, GymExercise, BadmintonSet, TennisSet, ActivityMetrics } from '@/types/database'
+import { EXERCISE_DB } from '@/constants/exercises'
 
 // ── Sport config ──────────────────────────────────────────────
 
@@ -356,6 +357,113 @@ function EnduranceFields({ distanceKm, onDistanceChange, heartRate, onHeartRateC
   )
 }
 
+const GYM_EXERCISES = EXERCISE_DB.gym.map(e => e.name)
+
+function GymExerciseRow({
+  exercise, exIdx, onNameChange, onAddSet, onUpdateSet, onDelete, t,
+}: {
+  exercise: GymExercise
+  exIdx: number
+  onNameChange: (name: string) => void
+  onAddSet: () => void
+  onUpdateSet: (setIdx: number, field: 'reps' | 'weight_kg', value: string) => void
+  onDelete: () => void
+  t: any
+}) {
+  const [suggestions, setSuggestions] = useState<string[]>([])
+
+  const handleNameChange = (v: string) => {
+    onNameChange(v)
+    if (v.length >= 2) {
+      const q = v.toLowerCase()
+      setSuggestions(GYM_EXERCISES.filter(n => n.toLowerCase().includes(q)).slice(0, 5))
+    } else {
+      setSuggestions([])
+    }
+  }
+
+  const pickSuggestion = (name: string) => {
+    onNameChange(name)
+    setSuggestions([])
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }
+
+  // Compute total volume for this exercise
+  const volume = exercise.sets.reduce((s, st) => s + st.reps * st.weight_kg, 0)
+
+  return (
+    <View style={styles.exerciseCard}>
+      {/* Header: name + delete */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TextInput
+          style={[styles.exerciseName, { flex: 1 }]}
+          value={exercise.name}
+          onChangeText={handleNameChange}
+          placeholder="Développé couché, Squat…"
+          placeholderTextColor={Colors.textTertiary}
+        />
+        <TouchableOpacity
+          onPress={onDelete}
+          style={{ padding: 6 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontSize: 14, color: Colors.error }}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Autocomplete suggestions */}
+      {suggestions.length > 0 && (
+        <View style={styles.suggestions}>
+          {suggestions.map(s => (
+            <TouchableOpacity
+              key={s}
+              style={styles.suggestionItem}
+              onPress={() => pickSuggestion(s)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.suggestionText}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Sets header */}
+      <View style={styles.setsHeader}>
+        <Text style={styles.setsHeaderText}>Série</Text>
+        <Text style={styles.setsHeaderText}>Reps</Text>
+        <Text style={styles.setsHeaderText}>Poids (kg)</Text>
+      </View>
+
+      {exercise.sets.map((s, si) => (
+        <View key={si} style={styles.setRow}>
+          <View style={styles.setIndexBadge}>
+            <Text style={styles.setIndex}>{si + 1}</Text>
+          </View>
+          <SmallField
+            value={s.reps > 0 ? String(s.reps) : ''}
+            onChange={v => onUpdateSet(si, 'reps', v)}
+            placeholder="—"
+          />
+          <SmallField
+            value={s.weight_kg > 0 ? String(s.weight_kg) : ''}
+            onChange={v => onUpdateSet(si, 'weight_kg', v)}
+            placeholder="—"
+          />
+        </View>
+      ))}
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <TouchableOpacity onPress={onAddSet} style={styles.addSetBtn}>
+          <Text style={styles.addSetText}>+ {t.activity.addSet}</Text>
+        </TouchableOpacity>
+        {volume > 0 && (
+          <Text style={styles.volumeText}>Vol: {volume.toFixed(0)} kg</Text>
+        )}
+      </View>
+    </View>
+  )
+}
+
 function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onChange: (e: GymExercise[]) => void; t: any }) {
   const addExercise = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -363,9 +471,12 @@ function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onCha
   }
 
   const updateExerciseName = (idx: number, name: string) => {
-    const next = [...exercises]
-    next[idx] = { ...next[idx], name }
-    onChange(next)
+    const next = [...exercises]; next[idx] = { ...next[idx], name }; onChange(next)
+  }
+
+  const deleteExercise = (idx: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    onChange(exercises.filter((_, i) => i !== idx))
   }
 
   const addSet = (exIdx: number) => {
@@ -382,36 +493,30 @@ function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onCha
     onChange(next)
   }
 
+  const totalVolume = exercises.reduce((sum, ex) =>
+    sum + ex.sets.reduce((s, st) => s + st.reps * st.weight_kg, 0), 0)
+
   return (
     <View style={styles.section}>
-      {exercises.map((ex, ei) => (
-        <View key={ei} style={styles.exerciseCard}>
-          <TextInput
-            style={styles.exerciseName}
-            value={ex.name}
-            onChangeText={v => updateExerciseName(ei, v)}
-            placeholder="Développé couché, Squat…"
-            placeholderTextColor={Colors.textTertiary}
-          />
-          {ex.sets.map((s, si) => (
-            <View key={si} style={styles.setRow}>
-              <Text style={styles.setIndex}>#{si + 1}</Text>
-              <SmallField
-                value={s.reps > 0 ? String(s.reps) : ''}
-                onChange={v => updateSet(ei, si, 'reps', v)}
-                placeholder="Reps"
-              />
-              <SmallField
-                value={s.weight_kg > 0 ? String(s.weight_kg) : ''}
-                onChange={v => updateSet(ei, si, 'weight_kg', v)}
-                placeholder="kg"
-              />
-            </View>
-          ))}
-          <TouchableOpacity onPress={() => addSet(ei)} style={styles.addSetBtn}>
-            <Text style={styles.addSetText}>+ {t.activity.addSet}</Text>
-          </TouchableOpacity>
+      {totalVolume > 0 && (
+        <View style={styles.volumeSummary}>
+          <Text style={styles.volumeSummaryText}>
+            💪 Volume total : <Text style={{ fontWeight: '800', color: Colors.electric }}>{totalVolume.toFixed(0)} kg</Text>
+          </Text>
         </View>
+      )}
+
+      {exercises.map((ex, ei) => (
+        <GymExerciseRow
+          key={ei}
+          exercise={ex}
+          exIdx={ei}
+          onNameChange={v => updateExerciseName(ei, v)}
+          onAddSet={() => addSet(ei)}
+          onUpdateSet={(si, field, v) => updateSet(ei, si, field, v)}
+          onDelete={() => deleteExercise(ei)}
+          t={t}
+        />
       ))}
 
       <Button label={`+ ${t.activity.addExercise}`} variant="secondary" onPress={addExercise} />
@@ -801,6 +906,60 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.electric,
     fontWeight: FontWeight.medium,
+  },
+  suggestions: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  suggestionText: {
+    fontSize: FontSize.sm,
+    color: Colors.textPrimary,
+  },
+  setsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: 2,
+  },
+  setsHeaderText: {
+    fontSize: 10,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textTertiary,
+    flex: 1,
+    textAlign: 'center',
+  },
+  setIndexBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.electricDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeText: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    fontStyle: 'italic',
+  },
+  volumeSummary: {
+    backgroundColor: Colors.electricDim,
+    borderRadius: Radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.sm,
+    alignItems: 'center',
+  },
+  volumeSummaryText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
   },
   toggleRow: {
     flexDirection: 'row',

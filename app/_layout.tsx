@@ -21,20 +21,14 @@ export default function RootLayout() {
     if (profile?.preferred_language) setLanguage(profile.preferred_language)
   }, [profile?.preferred_language])
 
-  // Auth guard: redirect once on startup, then only on sign-out
+  // Auth guard: redirect on startup and on every auth state change
   useEffect(() => {
     if (!ready) return
     SplashScreen.hideAsync()
     if (!didInitialNav.current) {
-      // First time ready — navigate to the right root
       didInitialNav.current = true
-      router.replace(userId ? '/(tabs)' : '/(auth)/login')
-      return
     }
-    // After initial nav: only handle sign-out (userId going null)
-    if (!userId) {
-      router.replace('/(auth)/login')
-    }
+    router.replace(userId ? '/(tabs)' : '/(auth)/login')
   }, [ready, userId])
 
   if (!ready) return null

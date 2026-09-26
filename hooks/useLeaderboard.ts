@@ -4,6 +4,11 @@ import type { Profile, Club } from '@/types/database'
 
 export type LeaderboardEntry = Pick<Profile, 'id' | 'username' | 'avatar_url' | 'is_pro' | 'hybrid_score'>
 
+export interface WeeklyEntry extends LeaderboardEntry {
+  weekly_sessions: number
+  weekly_seconds: number
+}
+
 export function useGlobalLeaderboard(limit = 50) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(false)
@@ -15,6 +20,22 @@ export function useGlobalLeaderboard(limit = 50) {
       .select('id, username, avatar_url, is_pro, hybrid_score')
       .order('hybrid_score', { ascending: false })
       .limit(limit)
+    setEntries(data ?? [])
+    setLoading(false)
+  }, [limit])
+
+  useEffect(() => { fetch() }, [fetch])
+
+  return { entries, loading, refetch: fetch }
+}
+
+export function useWeeklyLeaderboard(limit = 50) {
+  const [entries, setEntries] = useState<WeeklyEntry[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const fetch = useCallback(async () => {
+    setLoading(true)
+    const { data } = await (supabase as any).rpc('get_weekly_leaderboard', { limit_n: limit })
     setEntries(data ?? [])
     setLoading(false)
   }, [limit])

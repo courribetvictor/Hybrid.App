@@ -142,6 +142,7 @@ export interface Profile {
   preferred_unit: PreferredUnit
   preferred_language: PreferredLanguage
   avatar_url: string | null
+  favorite_sports: SportType[]
   created_at: string
 }
 
@@ -210,9 +211,10 @@ export type Database = {
     Tables: {
       profiles: {
         Row: DbRow<Profile>
-        Insert: DbRow<Omit<Profile, 'id' | 'hybrid_score' | 'created_at'> & {
+        Insert: DbRow<Omit<Profile, 'id' | 'hybrid_score' | 'created_at' | 'favorite_sports'> & {
           id?: string
           hybrid_score?: number
+          favorite_sports?: SportType[]
           created_at?: string
         }>
         Update: DbRow<Partial<Omit<Profile, 'id' | 'created_at'>>>

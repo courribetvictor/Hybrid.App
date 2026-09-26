@@ -2,6 +2,7 @@ import React from 'react'
 import { Tabs } from 'expo-router'
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Home, Trophy, User2 } from 'lucide-react-native'
 import { Colors, FontSize, FontWeight, Shadow } from '@/constants/theme'
 
 interface TabBarProps {
@@ -11,11 +12,9 @@ interface TabBarProps {
 }
 
 const TABS = [
-  { name: 'index',   label: 'Feed',    icon: '⚡' },
-  { name: 'social',  label: 'Social',  icon: '👥' },
-  { name: 'arena',   label: 'Arène',   icon: '🏆', center: true },
-  { name: 'stats',   label: 'Labo',    icon: '🔬' },
-  { name: 'profile', label: 'Profil',  icon: '👤' },
+  { name: 'index', label: 'Accueil', Icon: Home },
+  { name: 'arena', label: 'Arène',   Icon: Trophy, center: true },
+  { name: 'vous',  label: 'VOUS',    Icon: User2 },
 ]
 
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
@@ -25,8 +24,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
     <View style={[bar.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {state.routes.map((route, index) => {
         const tab = TABS.find(t => t.name === route.name)
+        if (!tab) return null
         const focused = state.index === index
-        const isCenter = tab?.center === true
+        const isCenter = tab.center === true
+        const IconComponent = tab.Icon
 
         const onPress = () => {
           const event = navigation.emit({
@@ -47,10 +48,14 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 onPress={onPress}
                 activeOpacity={0.85}
               >
-                <Text style={bar.centerIcon}>{tab?.icon}</Text>
+                <IconComponent
+                  size={24}
+                  color={Colors.textInverse}
+                  strokeWidth={focused ? 2.5 : 2}
+                />
               </TouchableOpacity>
               <Text style={[bar.centerLabel, focused && bar.centerLabelFocused]}>
-                {tab?.label}
+                {tab.label}
               </Text>
             </View>
           )
@@ -64,10 +69,14 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
             activeOpacity={0.7}
           >
             <View style={[bar.iconWrap, focused && bar.iconWrapFocused]}>
-              <Text style={bar.icon}>{tab?.icon}</Text>
+              <IconComponent
+                size={20}
+                color={focused ? Colors.electric : Colors.textTertiary}
+                strokeWidth={focused ? 2.5 : 1.8}
+              />
             </View>
             <Text style={[bar.label, focused && bar.labelFocused]}>
-              {tab?.label}
+              {tab.label}
             </Text>
           </TouchableOpacity>
         )
@@ -79,7 +88,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 export default function TabLayout() {
   return (
     <Tabs
-      tabBar={props => <CustomTabBar {...props} />}
+      tabBar={props => <CustomTabBar {...(props as any)} />}
       screenOptions={{ headerShown: false }}
     >
       {TABS.map(t => (
@@ -97,7 +106,7 @@ const bar = StyleSheet.create({
     backgroundColor: Colors.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.borderLight,
-    height: BAR_HEIGHT + 20, // extra for safe area padding
+    height: BAR_HEIGHT + 20,
     alignItems: 'flex-end',
     paddingHorizontal: 4,
     ...Platform.select({
@@ -128,7 +137,6 @@ const bar = StyleSheet.create({
   iconWrapFocused: {
     backgroundColor: Colors.electricDim,
   },
-  icon: { fontSize: 18 },
   label: {
     fontSize: 10,
     color: Colors.textTertiary,
@@ -138,7 +146,6 @@ const bar = StyleSheet.create({
     color: Colors.electric,
     fontWeight: FontWeight.bold,
   },
-  // ── Center (Arène) elevated button ──
   centerWrap: {
     flex: 1,
     alignItems: 'center',
@@ -154,14 +161,13 @@ const bar = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: -2,
-    marginTop: -20, // elevate above the bar line
+    marginTop: -20,
     ...Shadow.lg,
   },
   centerBtnFocused: {
-    backgroundColor: '#1A56F0', // slightly deeper blue when active
+    backgroundColor: '#1A56F0',
     transform: [{ scale: 1.06 }],
   },
-  centerIcon: { fontSize: 22 },
   centerLabel: {
     fontSize: 10,
     color: Colors.textTertiary,

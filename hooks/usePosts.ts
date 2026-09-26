@@ -47,11 +47,11 @@ export function usePostFeed(userId: string | undefined, followingIds: string[]) 
   }, [userId, followingIds.join(',')])
 
   const createPost = useCallback(
-    async (content: string, sportType?: SportType | null) => {
+    async (content: string, sportType?: SportType | null, mediaUrl?: string | null) => {
       if (!userId) return
       const { data, error } = await (supabase as any)
         .from('posts')
-        .insert({ user_id: userId, content, sport_type: sportType ?? null })
+        .insert({ user_id: userId, content, sport_type: sportType ?? null, media_url: mediaUrl ?? null })
         .select('*, profiles(username, avatar_url, is_pro)')
         .single()
       if (!error && data) {

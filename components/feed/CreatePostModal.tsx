@@ -1,9 +1,12 @@
 import React, { useState } from 'react'
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  TextInput, ScrollView, KeyboardAvoidingView, Platform,
+  TextInput, ScrollView, KeyboardAvoidingView, Platform, Image, ActivityIndicator,
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
+import * as FileSystem from 'expo-file-system'
+import { supabase } from '@/lib/supabase'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import type { SportType } from '@/types/database'
 
@@ -22,28 +25,73 @@ const SPORTS: { key: SportType; label: string; emoji: string }[] = [
 ]
 
 const MAX_CHARS = 500
+const MEDIA_BUCKET = 'media'
 
 interface CreatePostModalProps {
   visible: boolean
   onClose: () => void
-  onSubmit: (content: string, sportType?: SportType | null) => Promise<void>
+  onSubmit: (content: string, sportType?: SportType | null, mediaUrl?: string | null) => Promise<void>
+  userId?: string
 }
 
-export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalProps) {
+async function uploadPhoto(localUri: string, userId: string): Promise<string | null> {
+  try {
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    })
+    const byteChars = atob(base64)
+    const byteNums = new Uint8Array(byteChars.length)
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNums[i] = byteChars.charCodeAt(i)
+    }
+    const path = `${userId}/${Date.now()}.jpg`
+    const { error } = await (supabase.storage as any)
+      .from(MEDIA_BUCKET)
+      .upload(path, byteNums.buffer, { contentType: 'image/jpeg', upsert: false })
+    if (error) return null
+    const { data } = (supabase.storage as any).from(MEDIA_BUCKET).getPublicUrl(path)
+    return data?.publicUrl ?? null
+  } catch {
+    return null
+  }
+}
+
+export function CreatePostModal({ visible, onClose, onSubmit, userId }: CreatePostModalProps) {
   const [content, setContent] = useState('')
   const [sport, setSport] = useState<SportType | null>(null)
+  const [mediaUri, setMediaUri] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const canSubmit = content.trim().length > 0 && content.length <= MAX_CHARS
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') return
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.75,
+    })
+    if (!result.canceled && result.assets[0]) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      setMediaUri(result.assets[0].uri)
+    }
+  }
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setSubmitting(true)
     try {
-      await onSubmit(content.trim(), sport)
+      let mediaUrl: string | null = null
+      if (mediaUri && userId) {
+        mediaUrl = await uploadPhoto(mediaUri, userId)
+      }
+      await onSubmit(content.trim(), sport, mediaUrl)
       setContent('')
       setSport(null)
+      setMediaUri(null)
       onClose()
     } finally {
       setSubmitting(false)
@@ -56,6 +104,7 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
     }
     setContent('')
     setSport(null)
+    setMediaUri(null)
     onClose()
   }
 
@@ -89,21 +138,41 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
               {content.length}/{MAX_CHARS}
             </Text>
 
-            {/* Sport tag */}
-            <Text style={styles.sectionLabel}>Tagger un sport (optionnel)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sportRow}>
-              {SPORTS.map(s => (
+            {/* Photo preview */}
+            {mediaUri ? (
+              <View style={styles.photoPreviewWrap}>
+                <Image source={{ uri: mediaUri }} style={styles.photoPreview} resizeMode="cover" />
                 <TouchableOpacity
-                  key={s.key}
-                  style={[styles.sportChip, sport === s.key && { backgroundColor: SportColors[s.key], borderColor: SportColors[s.key] }]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSport(sport === s.key ? null : s.key) }}
-                  activeOpacity={0.75}
+                  style={styles.photoRemoveBtn}
+                  onPress={() => setMediaUri(null)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                  <Text style={[styles.sportLabel, sport === s.key && { color: '#fff' }]}>{s.label}</Text>
+                  <Text style={styles.photoRemoveTxt}>✕</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              </View>
+            ) : null}
+
+            {/* Action bar: photo + sport */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity style={styles.photoBtn} onPress={pickImage} activeOpacity={0.75}>
+                <Text style={styles.photoBtnIcon}>📷</Text>
+                <Text style={styles.photoBtnLabel}>Photo</Text>
+              </TouchableOpacity>
+              <View style={styles.actionDivider} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sportRow}>
+                {SPORTS.map(s => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[styles.sportChip, sport === s.key && { backgroundColor: SportColors[s.key], borderColor: SportColors[s.key] }]}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSport(sport === s.key ? null : s.key) }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.sportEmoji}>{s.emoji}</Text>
+                    <Text style={[styles.sportLabel, sport === s.key && { color: '#fff' }]}>{s.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
             <TouchableOpacity
               style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
@@ -111,9 +180,11 @@ export function CreatePostModal({ visible, onClose, onSubmit }: CreatePostModalP
               disabled={!canSubmit || submitting}
               activeOpacity={0.85}
             >
-              <Text style={styles.submitTxt}>
-                {submitting ? 'Publication…' : 'Publier'}
-              </Text>
+              {submitting ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.submitTxt}>Publier</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -162,14 +233,48 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: -4,
   },
-  sectionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
+  photoPreviewWrap: {
+    position: 'relative',
+    borderRadius: Radius.md,
+    overflow: 'hidden',
   },
-  sportRow: { gap: Spacing.sm, paddingBottom: 4 },
+  photoPreview: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: Radius.md,
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveTxt: { color: '#fff', fontSize: 12, fontWeight: FontWeight.bold },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.bgAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+  },
+  photoBtnIcon: { fontSize: 14 },
+  photoBtnLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  actionDivider: { width: 1, height: 20, backgroundColor: Colors.borderLight },
+  sportRow: { gap: Spacing.sm, paddingBottom: 2 },
   sportChip: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { Avatar } from '@/components/ui/Avatar'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
@@ -83,6 +83,11 @@ export function PostCard({ post, currentUserId, onLike, onDelete }: PostCardProp
       {/* Content */}
       <Text style={styles.content}>{post.content}</Text>
 
+      {/* Media */}
+      {post.media_url ? (
+        <Image source={{ uri: post.media_url }} style={styles.media} resizeMode="cover" />
+      ) : null}
+
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.likeBtn} onPress={handleLike} activeOpacity={0.75}>
@@ -154,4 +159,10 @@ const styles = StyleSheet.create({
   likeCount: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
   likeCountActive: { color: Colors.error },
   hint: { fontSize: FontSize.xs, color: Colors.textTertiary, flex: 1 },
+  media: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.bgAlt,
+  },
 })

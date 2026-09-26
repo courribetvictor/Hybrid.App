@@ -188,7 +188,7 @@ function usePrivacySettings() {
 
 // ── Screen ────────────────────────────────────────────────────
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ embedded = false }: { embedded?: boolean }) {
   const { userId } = useSession()
   const { profile, updateProfile } = useProfile(userId ?? undefined)
   const { activities } = useActivities(userId ?? undefined, 365)
@@ -370,7 +370,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Profil" />
+      {!embedded && <ScreenHeader title="Profil" />}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
 
