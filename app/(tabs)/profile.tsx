@@ -292,23 +292,25 @@ export default function ProfileScreen() {
 
   const handleToggleUnit = useCallback(async () => {
     const next: PreferredUnit = unit === 'imperial' ? 'metric' : 'imperial'
-    setUnit(next) // local state → UI change immédiat
+    setUnit(next) // UI immédiat — ne revient pas en arrière même si DB échoue
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
       await updateProfile({ preferred_unit: next })
-    } catch {
-      setUnit(unit) // revert si erreur DB
+    } catch (e: any) {
+      console.error('updateProfile unit error:', e?.message)
+      // Ne pas réverter — la préférence reste active localement
+      // Si la colonne manque dans Supabase, lance la migration SQL profile_prefs
     }
   }, [unit, updateProfile])
 
   const handleToggleLang = useCallback(async () => {
     const next: PreferredLanguage = lang === 'en' ? 'fr' : 'en'
-    setLang(next) // local state → UI change immédiat
+    setLang(next) // UI immédiat — ne revient pas en arrière même si DB échoue
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
       await updateProfile({ preferred_language: next })
-    } catch {
-      setLang(lang) // revert si erreur DB
+    } catch (e: any) {
+      console.error('updateProfile lang error:', e?.message)
     }
   }, [lang, updateProfile])
 
