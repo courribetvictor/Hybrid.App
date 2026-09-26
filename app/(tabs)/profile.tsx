@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -252,8 +252,17 @@ export default function ProfileScreen() {
     }
   }, [userId, editVisible, pickAndUploadAvatar])
 
-  const unit = profile?.preferred_unit ?? 'metric'
-  const lang = profile?.preferred_language ?? 'fr'
+  const [unit, setUnit] = useState<PreferredUnit>('metric')
+  const [lang, setLang] = useState<PreferredLanguage>('fr')
+  // Sync once from DB when profile first loads
+  const prefsLoaded = useRef(false)
+  useEffect(() => {
+    if (profile && !prefsLoaded.current) {
+      if (profile.preferred_unit)    setUnit(profile.preferred_unit)
+      if (profile.preferred_language) setLang(profile.preferred_language)
+      prefsLoaded.current = true
+    }
+  }, [profile])
 
   const hybridScore = computeHybridScore(activities)
   const scoreProgress = hybridScore / HYBRID_SCORE_MAX
@@ -272,21 +281,23 @@ export default function ProfileScreen() {
 
   const handleToggleUnit = useCallback(async () => {
     const next: PreferredUnit = unit === 'imperial' ? 'metric' : 'imperial'
+    setUnit(next) // local state → UI change immédiat
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
       await updateProfile({ preferred_unit: next })
-    } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? 'Impossible de changer les unités')
+    } catch {
+      setUnit(unit) // revert si erreur DB
     }
   }, [unit, updateProfile])
 
   const handleToggleLang = useCallback(async () => {
     const next: PreferredLanguage = lang === 'en' ? 'fr' : 'en'
+    setLang(next) // local state → UI change immédiat
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     try {
       await updateProfile({ preferred_language: next })
-    } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? 'Impossible de changer la langue')
+    } catch {
+      setLang(lang) // revert si erreur DB
     }
   }, [lang, updateProfile])
 
