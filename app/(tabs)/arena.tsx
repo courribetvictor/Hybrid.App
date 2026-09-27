@@ -12,6 +12,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -19,12 +20,17 @@ import Animated, {
   withDelay,
   withSpring,
 } from 'react-native-reanimated'
+import {
+  Trophy, Calendar, Globe, Users, Building2, Search,
+  Zap, PersonStanding, UserPlus, Compass, User,
+} from 'lucide-react-native'
 import { LeaderboardRow } from '@/components/arena/LeaderboardRow'
 import { ChallengeCard } from '@/components/arena/ChallengeCard'
 import { PaywallModal } from '@/components/arena/PaywallModal'
 import { FriendSearch } from '@/components/arena/FriendSearch'
 import { Avatar } from '@/components/ui/Avatar'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
+import { SPORTS_CONFIG, type LucideIcon } from '@/constants/sports'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { useGlobalLeaderboard, useClubLeaderboard, useWeeklyLeaderboard } from '@/hooks/useLeaderboard'
 import { useWeeklyChallenges } from '@/hooks/useWeeklyChallenges'
 import { useFriendships } from '@/hooks/useFriendships'
@@ -33,7 +39,7 @@ import { useProfile, useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong } from '@/lib/units'
-import type { Profile } from '@/types/database'
+import type { Profile, SportType } from '@/types/database'
 
 type ArenaTab = 'leaderboard' | 'challenges' | 'social' | 'friends'
 
@@ -43,17 +49,6 @@ const TABS: { key: ArenaTab; label: string }[] = [
   { key: 'social',      label: 'Social' },
   { key: 'friends',     label: 'Amis' },
 ]
-
-const SPORT_EMOJI: Record<string, string> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
-  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
-  hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
-const SPORT_LABEL: Record<string, string> = {
-  running: 'Course', cycling: 'Vélo', swimming: 'Natation', gym: 'Muscu',
-  badminton: 'Badminton', athletics: 'Athlétisme', football: 'Football',
-  tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
-}
 
 function socialTimeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000
@@ -93,7 +88,7 @@ export default function ArenaScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View>
@@ -101,15 +96,15 @@ export default function ArenaScreen() {
             <Text style={styles.headerSub}>Classements & Défis</Text>
           </View>
           <View style={styles.trophyBadge}>
-            <Text style={styles.trophyEmoji}>🏆</Text>
+            <Trophy size={20} color="#F59E0B" strokeWidth={1.8} />
           </View>
         </View>
       </View>
 
-      {/* Top tabs */}
+      {/* ── Top tabs ── */}
       <TopTabBar active={activeTab} onChange={setActiveTab} />
 
-      {/* Content */}
+      {/* ── Content ── */}
       {activeTab === 'leaderboard' && (
         <LeaderboardTab
           sub={leaderboardSub}
@@ -166,13 +161,7 @@ export default function ArenaScreen() {
 
 // ── Top tab bar ───────────────────────────────────────────────
 
-function TopTabBar({
-  active,
-  onChange,
-}: {
-  active: ArenaTab
-  onChange: (t: ArenaTab) => void
-}) {
+function TopTabBar({ active, onChange }: { active: ArenaTab; onChange: (t: ArenaTab) => void }) {
   return (
     <View style={topTabStyles.bar}>
       {TABS.map(tab => (
@@ -202,11 +191,11 @@ function TopTabPill({ label, active, onPress }: { label: string; active: boolean
 
 // ── Leaderboard tab ───────────────────────────────────────────
 
-const LB_SUBS: { key: LeaderboardSub; label: string }[] = [
-  { key: 'weekly',  label: '📅 Hebdo' },
-  { key: 'global',  label: '🌍 Mondial' },
-  { key: 'friends', label: '👥 Amis' },
-  { key: 'clubs',   label: '🏛 Clubs' },
+const LB_SUBS: { key: LeaderboardSub; label: string; Icon: LucideIcon }[] = [
+  { key: 'weekly',  label: 'Hebdo',   Icon: Calendar },
+  { key: 'global',  label: 'Mondial', Icon: Globe },
+  { key: 'friends', label: 'Amis',    Icon: Users },
+  { key: 'clubs',   label: 'Clubs',   Icon: Building2 },
 ]
 
 function LeaderboardTab({
@@ -223,23 +212,27 @@ function LeaderboardTab({
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Sub-toggle: 4 options */}
+      {/* Sub-toggle */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={lbStyles.toggleScroll}
       >
-        {LB_SUBS.map(s => (
-          <TouchableOpacity
-            key={s.key}
-            style={[lbStyles.toggleBtn, sub === s.key && lbStyles.toggleActive]}
-            onPress={() => onSubChange(s.key)}
-          >
-            <Text style={[lbStyles.toggleText, sub === s.key && lbStyles.toggleTextActive]}>
-              {s.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {LB_SUBS.map(s => {
+          const isActive = sub === s.key
+          return (
+            <TouchableOpacity
+              key={s.key}
+              style={[lbStyles.toggleBtn, isActive && lbStyles.toggleActive]}
+              onPress={() => onSubChange(s.key)}
+            >
+              <s.Icon size={13} color={isActive ? Colors.electric : Colors.textTertiary} strokeWidth={isActive ? 2.2 : 1.8} />
+              <Text style={[lbStyles.toggleText, isActive && lbStyles.toggleTextActive]}>
+                {s.label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </ScrollView>
 
       {sub === 'clubs' ? (
@@ -249,7 +242,7 @@ function LeaderboardTab({
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.electric} />}
         >
           {clubs.length === 0 ? (
-            <LbEmpty emoji="🏛" text="Aucun club pour l'instant" />
+            <EmptyState Icon={Building2} text="Aucun club pour l'instant" />
           ) : (
             clubs.map((club: any, i: number) => <ClubRow key={club.id} club={club} rank={i + 1} />)
           )}
@@ -269,8 +262,8 @@ function LeaderboardTab({
             />
           )}
           ListEmptyComponent={
-            <LbEmpty
-              emoji={sub === 'friends' ? '👥' : '🏃'}
+            <EmptyState
+              Icon={sub === 'friends' ? Users : PersonStanding}
               text={sub === 'friends' ? 'Suis des athlètes pour les voir ici' : 'Aucune activité cette semaine'}
             />
           }
@@ -283,20 +276,14 @@ function LeaderboardTab({
   )
 }
 
-function LbEmpty({ emoji, text }: { emoji: string; text: string }) {
-  return (
-    <View style={emptyStyles.container}>
-      <Text style={emptyStyles.emoji}>{emoji}</Text>
-      <Text style={emptyStyles.text}>{text}</Text>
-    </View>
-  )
-}
-
 function ClubRow({ club, rank }: { club: any; rank: number }) {
-  const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' }
+  const isPodium = rank <= 3
+  const PODIUM_COLORS: Record<number, string> = { 1: '#F59E0B', 2: '#94A3B8', 3: '#CD7F32' }
   return (
     <View style={lbStyles.clubRow}>
-      <Text style={lbStyles.clubRank}>{MEDAL[rank] ?? rank}</Text>
+      <View style={[lbStyles.clubRankBadge, isPodium && { backgroundColor: PODIUM_COLORS[rank] }]}>
+        <Text style={[lbStyles.clubRankText, isPodium && { color: '#fff' }]}>{rank}</Text>
+      </View>
       <View style={lbStyles.clubInfo}>
         <Text style={lbStyles.clubName}>{club.name}</Text>
         <Text style={lbStyles.clubMembers}>{club.member_count} membres</Text>
@@ -310,12 +297,7 @@ function ClubRow({ club, rank }: { club: any; rank: number }) {
 
 function ChallengesTab({ challenges, isPro, onProLock, refreshing, onRefresh }: any) {
   if (challenges.length === 0 && !refreshing) {
-    return (
-      <View style={emptyStyles.container}>
-        <Text style={emptyStyles.emoji}>📅</Text>
-        <Text style={emptyStyles.text}>Aucun défi cette semaine</Text>
-      </View>
-    )
+    return <EmptyState Icon={Calendar} text="Aucun défi cette semaine" />
   }
 
   return (
@@ -358,11 +340,7 @@ function FriendsTab({ friends, friendIds, currentUserId, onRequestSent }: any) {
       renderItem={({ item }: any) => <FriendCard friend={item} />}
       ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
       ListEmptyComponent={
-        <View style={emptyStyles.container}>
-          <Text style={emptyStyles.emoji}>👥</Text>
-          <Text style={emptyStyles.text}>Recherche des amis ci-dessus</Text>
-          <Text style={emptyStyles.sub}>Tape un pseudo pour ajouter quelqu'un</Text>
-        </View>
+        <EmptyState Icon={UserPlus} text="Recherche des amis ci-dessus" sub="Tape un pseudo pour ajouter quelqu'un" />
       }
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
@@ -388,7 +366,8 @@ function FriendCard({ friend }: { friend: any }) {
           <Text style={friendStyles.cardName}>{friend.profile.username}</Text>
           {friend.profile.is_pro && (
             <View style={friendStyles.proBadge}>
-              <Text style={friendStyles.proText}>⚡ PRO</Text>
+              <Zap size={9} color={Colors.electric} strokeWidth={2.5} />
+              <Text style={friendStyles.proText}>PRO</Text>
             </View>
           )}
         </View>
@@ -450,25 +429,25 @@ function SocialTab({
     setSearchLoading(false)
   }, [userId])
 
-  const SUB_LABELS: Record<SocialSubTab, string> = {
-    feed: `⚡ Feed (${followingCount})`,
-    abonnements: `Abonnements`,
-    decouvrir: '🔍 Découvrir',
-  }
+  const SUB_ITEMS: { key: SocialSubTab; label: string }[] = [
+    { key: 'feed',        label: `Feed (${followingCount})` },
+    { key: 'abonnements', label: 'Abonnements' },
+    { key: 'decouvrir',   label: 'Découvrir' },
+  ]
 
   return (
     <View style={{ flex: 1 }}>
       {/* Sub-tab bar */}
       <View style={socialStyles.subBar}>
-        {(['feed', 'abonnements', 'decouvrir'] as SocialSubTab[]).map(t => (
+        {SUB_ITEMS.map(t => (
           <TouchableOpacity
-            key={t}
-            style={[socialStyles.subTab, subTab === t && socialStyles.subTabActive]}
-            onPress={() => setSubTab(t)}
+            key={t.key}
+            style={[socialStyles.subTab, subTab === t.key && socialStyles.subTabActive]}
+            onPress={() => setSubTab(t.key)}
             activeOpacity={0.75}
           >
-            <Text style={[socialStyles.subLabel, subTab === t && socialStyles.subLabelActive]}>
-              {SUB_LABELS[t]}
+            <Text style={[socialStyles.subLabel, subTab === t.key && socialStyles.subLabelActive]}>
+              {t.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -481,9 +460,9 @@ function SocialTab({
           feedLoading ? (
             <View style={emptyStyles.container}><ActivityIndicator color={Colors.electric} /></View>
           ) : following.length === 0 ? (
-            <SocialEmpty emoji="📡" title="Ton feed est vide" sub="Suis des athlètes pour voir leurs séances" />
+            <EmptyState Icon={Zap} title="Ton feed est vide" sub="Suis des athlètes pour voir leurs séances" />
           ) : followFeed.length === 0 ? (
-            <SocialEmpty emoji="🏃" title="Aucune activité récente" sub="Les athlètes que tu suis n'ont pas encore bougé" />
+            <EmptyState Icon={PersonStanding} title="Aucune activité récente" sub="Les athlètes que tu suis n'ont pas encore bougé" />
           ) : (
             followFeed.map((a: any, i: number) => (
               <SocialFeedCard key={a.id} activity={a} index={i} />
@@ -496,7 +475,7 @@ function SocialTab({
           loading ? (
             <View style={emptyStyles.container}><ActivityIndicator color={Colors.electric} /></View>
           ) : following.length === 0 ? (
-            <SocialEmpty emoji="👤" title="Tu ne suis personne" sub="Va dans Découvrir pour trouver des athlètes" />
+            <EmptyState Icon={User} title="Tu ne suis personne" sub="Va dans Découvrir pour trouver des athlètes" />
           ) : (
             <View style={socialStyles.userList}>
               <Text style={socialStyles.sectionTitle}>{followingCount} abonnement{followingCount > 1 ? 's' : ''}</Text>
@@ -516,7 +495,7 @@ function SocialTab({
         {subTab === 'decouvrir' && (
           <>
             <View style={socialStyles.searchWrap}>
-              <Text style={{ fontSize: 16 }}>🔍</Text>
+              <Search size={16} color={Colors.textTertiary} strokeWidth={1.8} />
               <TextInput
                 style={socialStyles.searchInput}
                 value={search}
@@ -530,7 +509,7 @@ function SocialTab({
             </View>
             {search.length >= 2 ? (
               searchResults.length === 0 && !searchLoading ? (
-                <SocialEmpty emoji="🔍" title={`Aucun résultat pour « ${search} »`} sub="" />
+                <EmptyState Icon={Search} title={`Aucun résultat pour « ${search} »`} />
               ) : (
                 <View style={socialStyles.userList}>
                   {searchResults.map(user => (
@@ -544,7 +523,7 @@ function SocialTab({
                 </View>
               )
             ) : (
-              <SocialEmpty emoji="🌐" title="Découvre des athlètes" sub="Tape un pseudo pour rechercher" />
+              <EmptyState Icon={Compass} title="Découvre des athlètes" sub="Tape un pseudo pour rechercher" />
             )}
           </>
         )}
@@ -564,22 +543,31 @@ function SocialFeedCard({ activity, index }: { activity: any; index: number }) {
   const anim = useAnimatedStyle(() => ({
     opacity: opacity.value, transform: [{ translateY: translateY.value }],
   }))
-  const sport = activity.sport_type
-  const accent = (SportColors as any)[sport] ?? Colors.electric
+
+  const sport = SPORTS_CONFIG[activity.sport_type as SportType] ?? SPORTS_CONFIG.running
+  const { Icon: SportIcon } = sport
+
   return (
     <Animated.View style={[socialStyles.feedCard, anim]}>
-      <View style={[socialStyles.feedBanner, { backgroundColor: accent }]}>
-        <Text style={socialStyles.feedEmoji}>{SPORT_EMOJI[sport] ?? '🏃'}</Text>
+      <LinearGradient
+        colors={[sport.color, sport.color + 'CC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={socialStyles.feedBanner}
+      >
+        <View style={socialStyles.feedIconCircle}>
+          <SportIcon size={20} color="#fff" strokeWidth={1.8} />
+        </View>
         <View style={{ flex: 1 }}>
-          <Text style={socialStyles.feedSport}>{SPORT_LABEL[sport] ?? sport}</Text>
+          <Text style={socialStyles.feedSport}>{sport.labelLong.toUpperCase()}</Text>
           <Text style={socialStyles.feedDuration}>{formatDurationLong(activity.duration_seconds)}</Text>
         </View>
         {!!activity.calories_burned && (
           <View style={socialStyles.calBadge}>
-            <Text style={socialStyles.calText}>🔥 {activity.calories_burned}</Text>
+            <Text style={socialStyles.calText}>{activity.calories_burned} kcal</Text>
           </View>
         )}
-      </View>
+      </LinearGradient>
       <View style={socialStyles.feedUser}>
         <Avatar uri={activity.profile?.avatar_url} username={activity.profile?.username ?? '?'} isPro={activity.profile?.is_pro} size={30} />
         <View style={{ flex: 1 }}>
@@ -598,7 +586,10 @@ function SocialUserRow({ user, isFollowing, onToggle }: { user: any; isFollowing
       <View style={{ flex: 1 }}>
         <Text style={socialStyles.userName}>{user?.username}</Text>
         {(user?.hybrid_score ?? 0) > 0 && (
-          <Text style={socialStyles.userScore}>⚡ {Math.round(user.hybrid_score)} pts</Text>
+          <View style={socialStyles.scoreRow}>
+            <Zap size={10} color={Colors.textTertiary} strokeWidth={2} />
+            <Text style={socialStyles.userScore}>{Math.round(user.hybrid_score)} pts</Text>
+          </View>
         )}
       </View>
       <TouchableOpacity
@@ -607,18 +598,28 @@ function SocialUserRow({ user, isFollowing, onToggle }: { user: any; isFollowing
         activeOpacity={0.8}
       >
         <Text style={[socialStyles.followBtnText, isFollowing && socialStyles.followBtnTextActive]}>
-          {isFollowing ? 'Suivi ✓' : '+ Suivre'}
+          {isFollowing ? 'Suivi' : '+ Suivre'}
         </Text>
       </TouchableOpacity>
     </View>
   )
 }
 
-function SocialEmpty({ emoji, title, sub }: { emoji: string; title: string; sub: string }) {
+// ── Shared empty state ────────────────────────────────────────
+
+function EmptyState({ Icon, title, text, sub }: {
+  Icon: LucideIcon
+  title?: string
+  text?: string
+  sub?: string
+}) {
+  const label = title ?? text ?? ''
   return (
     <View style={emptyStyles.container}>
-      <Text style={emptyStyles.emoji}>{emoji}</Text>
-      <Text style={emptyStyles.text}>{title}</Text>
+      <View style={emptyStyles.iconWrap}>
+        <Icon size={30} color={Colors.textTertiary} strokeWidth={1.5} />
+      </View>
+      <Text style={emptyStyles.text}>{label}</Text>
       {!!sub && <Text style={emptyStyles.sub}>{sub}</Text>}
     </View>
   )
@@ -657,13 +658,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(245,158,11,0.15)',
+    backgroundColor: 'rgba(245,158,11,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.3)',
+    borderColor: 'rgba(245,158,11,0.28)',
   },
-  trophyEmoji: { fontSize: 20 },
   listContent: {
     padding: Spacing.md,
     paddingBottom: 40,
@@ -699,10 +699,12 @@ const lbStyles = StyleSheet.create({
     gap: Spacing.xs,
   },
   toggleBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+    borderRadius: Radius.full,
     backgroundColor: Colors.bgAlt,
     borderWidth: 1,
     borderColor: Colors.borderLight,
@@ -723,7 +725,15 @@ const lbStyles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
     gap: Spacing.sm,
   },
-  clubRank: { width: 28, fontSize: 18, textAlign: 'center' },
+  clubRankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bgAlt,
+  },
+  clubRankText: { fontSize: 12, fontWeight: FontWeight.bold, color: Colors.textTertiary },
   clubInfo: { flex: 1 },
   clubName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   clubMembers: { fontSize: FontSize.xs, color: Colors.textTertiary },
@@ -749,6 +759,9 @@ const friendStyles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   cardName: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary, flex: 1 },
   proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: Colors.electricDim,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -760,32 +773,31 @@ const friendStyles = StyleSheet.create({
   scoreLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, marginRight: Spacing.xs },
   scoreBarBg: { flex: 1, height: 4, backgroundColor: Colors.bgAlt, borderRadius: 2, overflow: 'hidden' },
   scoreBarFill: { height: '100%', borderRadius: 2 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  name: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
-  },
 })
 
 const emptyStyles = StyleSheet.create({
   container: {
     alignItems: 'center',
     paddingTop: 60,
+    paddingHorizontal: Spacing.xl,
     gap: Spacing.sm,
   },
-  emoji: { fontSize: 40 },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.bgAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
   text: {
     fontSize: FontSize.md,
-    color: Colors.textTertiary,
+    color: Colors.textSecondary,
     textAlign: 'center',
+    fontWeight: FontWeight.medium,
   },
   sub: {
     fontSize: FontSize.sm,
@@ -848,7 +860,8 @@ const socialStyles = StyleSheet.create({
     borderTopColor: Colors.borderLight,
   },
   userName: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
-  userScore: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 1 },
+  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  userScore: { fontSize: FontSize.xs, color: Colors.textTertiary },
   followBtn: {
     backgroundColor: Colors.electric,
     paddingHorizontal: 14,
@@ -864,6 +877,8 @@ const socialStyles = StyleSheet.create({
   },
   followBtnText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: '#fff' },
   followBtnTextActive: { color: Colors.textSecondary },
+
+  // Feed card
   feedCard: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
@@ -872,23 +887,34 @@ const socialStyles = StyleSheet.create({
     ...Shadow.sm,
   },
   feedBanner: {
-    height: 72,
+    height: 76,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    gap: 12,
   },
-  feedEmoji: { fontSize: 28 },
+  feedIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.30)',
+    flexShrink: 0,
+  },
   feedSport: {
-    fontSize: FontSize.xs,
+    fontSize: 9,
     fontWeight: FontWeight.extrabold,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.78)',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.2,
+    marginBottom: 2,
   },
-  feedDuration: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: '#fff' },
+  feedDuration: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: '#fff', letterSpacing: -0.3 },
   calBadge: {
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.22)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,

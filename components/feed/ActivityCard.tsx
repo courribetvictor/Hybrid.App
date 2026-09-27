@@ -1,47 +1,22 @@
 import React, { useCallback, useState, useEffect } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withSequence,
-  withTiming,
-  withDelay,
+  useSharedValue, useAnimatedStyle, withSpring,
+  withSequence, withTiming, withDelay,
 } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import {
+  MapPin, Timer, Heart, Mountain, Dumbbell, Target,
+  Trophy, Flame, CheckCircle2, XCircle, Zap, Star,
+} from 'lucide-react-native'
 import { Avatar } from '@/components/ui/Avatar'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
+import { SPORTS_CONFIG, type LucideIcon } from '@/constants/sports'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { formatDurationLong, formatDistance, formatPace } from '@/lib/units'
-import type { ActivityWithProfile, SportType, EnduranceMetrics, GymMetrics, BadmintonMetrics } from '@/types/database'
+import type { ActivityWithProfile, EnduranceMetrics, GymMetrics, BadmintonMetrics } from '@/types/database'
 
-const SPORT_EMOJI: Record<SportType, string> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊',
-  gym: '🏋️', badminton: '🏸', athletics: '⚡',
-  football: '⚽', tennis: '🎾', hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
-const SPORT_LABEL: Record<SportType, string> = {
-  running: 'Course à pied', cycling: 'Vélo', swimming: 'Natation',
-  gym: 'Musculation', badminton: 'Badminton', athletics: 'Athlétisme',
-  football: 'Football', tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
-}
-const SPORT_BANNER_EMOJI: Record<SportType, string> = {
-  running: '🏃‍♂️', cycling: '🚵', swimming: '🏊‍♀️',
-  gym: '💪', badminton: '🏸', athletics: '🎽',
-  football: '⚽', tennis: '🎾', hiking: '🏔️', yoga: '🕉️', boxing: '🥊',
-}
-const SPORT_BG_PATTERN: Record<SportType, string[]> = {
-  running:   ['F', 'P', 'C', 'S'],
-  cycling:   ['V', 'D', 'T', 'M'],
-  swimming:  ['∼', '≈', '∼', '≈'],
-  gym:       ['💪', '🔥', '⚡', '💥'],
-  badminton: ['→', '←', '↗', '↙'],
-  athletics: ['⚡', '🏅', '⚡', '🏅'],
-  football:  ['⚽', '🥅', '⚽', '🥅'],
-  tennis:    ['🎾', '⟳', '🎾', '⟳'],
-  hiking:    ['△', '◇', '△', '◇'],
-  yoga:      ['☯', '✿', '☯', '✿'],
-  boxing:    ['🥊', '💫', '🥊', '💫'],
-}
+type MetricItem = { value: string; label: string; Icon: LucideIcon }
 
 export function ActivityCard({ activity, unit = 'metric', index = 0 }: {
   activity: ActivityWithProfile
@@ -51,8 +26,6 @@ export function ActivityCard({ activity, unit = 'metric', index = 0 }: {
   const [kudosed, setKudosed] = useState(false)
   const [kudosCount, setKudosCount] = useState(0)
   const scale = useSharedValue(1)
-
-  // Entrance animation
   const opacity = useSharedValue(0)
   const translateY = useSharedValue(24)
 
@@ -65,8 +38,7 @@ export function ActivityCard({ activity, unit = 'metric', index = 0 }: {
     opacity: opacity.value,
     transform: [{ translateY: translateY.value }],
   }))
-
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
+  const flameAnim = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }))
 
   const handleKudos = useCallback(() => {
     if (kudosed) return
@@ -79,167 +51,196 @@ export function ActivityCard({ activity, unit = 'metric', index = 0 }: {
     setKudosCount(c => c + 1)
   }, [kudosed, scale])
 
-  const accent = SportColors[activity.sport_type]
+  const sport = SPORTS_CONFIG[activity.sport_type]
+  const accent = sport.color
+  const { Icon: SportIcon } = sport
   const metrics = getMetrics(activity, unit)
-  const patterns = SPORT_BG_PATTERN[activity.sport_type]
 
   return (
     <Animated.View style={[styles.card, entranceStyle]}>
-      {/* Sport banner */}
-      <View style={[styles.banner, { backgroundColor: accent }]}>
-        {/* Pattern bg */}
-        <View style={styles.bannerPattern}>
-          {patterns.map((p, i) => (
-            <Text key={i} style={[styles.patternChar, { opacity: 0.15 + (i % 2) * 0.08 }]}>{p}</Text>
-          ))}
+      {/* ── Banner ── */}
+      <LinearGradient
+        colors={[accent, accent + 'CC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.banner}
+      >
+        <View style={styles.iconCircle}>
+          <SportIcon size={26} color="#fff" strokeWidth={1.8} />
         </View>
-        {/* Content */}
-        <View style={styles.bannerContent}>
-          <Text style={styles.bannerEmoji}>{SPORT_BANNER_EMOJI[activity.sport_type]}</Text>
-          <View style={styles.bannerText}>
-            <Text style={styles.bannerSport}>{SPORT_LABEL[activity.sport_type]}</Text>
-            <Text style={styles.bannerDuration}>{formatDurationLong(activity.duration_seconds)}</Text>
-          </View>
-        </View>
-        {/* Calories badge */}
-        {activity.calories_burned ? (
-          <View style={styles.calBadge}>
-            <Text style={styles.calBadgeText}>🔥 {activity.calories_burned} kcal</Text>
-          </View>
-        ) : null}
-      </View>
 
-      {/* User row */}
-      <View style={styles.header}>
+        <View style={styles.bannerText}>
+          <Text style={styles.bannerSport} numberOfLines={1}>
+            {sport.labelLong.toUpperCase()}
+          </Text>
+          <Text style={styles.bannerDuration}>
+            {formatDurationLong(activity.duration_seconds)}
+          </Text>
+        </View>
+
+        {!!activity.calories_burned && (
+          <View style={styles.calBadge}>
+            <Flame size={11} color="rgba(255,255,255,0.95)" strokeWidth={2.2} />
+            <Text style={styles.calText}>{activity.calories_burned} kcal</Text>
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* ── User row ── */}
+      <View style={styles.userRow}>
         <Avatar
           uri={activity.profile.avatar_url}
           username={activity.profile.username}
           isPro={activity.profile.is_pro}
-          size={36}
+          size={34}
         />
-        <View style={styles.headerText}>
+        <View style={styles.userInfo}>
           <Text style={styles.username}>{activity.profile.username}</Text>
           <Text style={styles.meta}>{timeAgo(activity.created_at)}</Text>
         </View>
       </View>
 
-      {/* Metric grid */}
+      {/* ── Metrics ── */}
       {metrics.length > 0 && (
-        <View style={styles.metricGrid}>
+        <View style={styles.metricRow}>
           {metrics.map((m, i) => (
-            <View key={i} style={[styles.metricCell, { borderLeftColor: accent + '50', borderLeftWidth: i === 0 ? 0 : 1 }]}>
-              <Text style={styles.metricValue}>{m.value}</Text>
-              <Text style={styles.metricLabel}>{m.label}</Text>
+            <View
+              key={i}
+              style={[
+                styles.metricCell,
+                i > 0 && { borderLeftWidth: 1, borderLeftColor: Colors.borderLight },
+              ]}
+            >
+              <m.Icon size={12} color={accent} strokeWidth={2} />
+              <Text style={styles.metricVal}>{m.value}</Text>
+              <Text style={styles.metricLbl}>{m.label}</Text>
             </View>
           ))}
         </View>
       )}
 
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Footer */}
+      {/* ── Footer ── */}
       <View style={styles.footer}>
-        <TouchableOpacity onPress={handleKudos} activeOpacity={0.75} style={styles.kudosWrap}>
-          <Animated.Text style={[styles.kudosEmoji, animStyle]}>
-            {kudosed ? '🔥' : '👊'}
-          </Animated.Text>
+        <TouchableOpacity onPress={handleKudos} activeOpacity={0.75} style={styles.kudosBtn}>
+          <Animated.View style={flameAnim}>
+            <Flame
+              size={16}
+              color={kudosed ? '#FF6B35' : Colors.textTertiary}
+              fill={kudosed ? '#FF6B35' : 'none'}
+              strokeWidth={2}
+            />
+          </Animated.View>
           <Text style={[styles.kudosText, kudosed && styles.kudosActive]}>
-            {kudosed ? `Kudos · ${kudosCount}` : 'Kudos'}
+            {kudosCount > 0 ? `${kudosCount} Kudos` : 'Kudos'}
           </Text>
         </TouchableOpacity>
 
-        <View style={[styles.sportDot, { backgroundColor: accent }]} />
+        <View style={[styles.sportPill, { backgroundColor: accent + '18' }]}>
+          <SportIcon size={11} color={accent} strokeWidth={2} />
+          <Text style={[styles.sportPillLabel, { color: accent }]}>{sport.label}</Text>
+        </View>
       </View>
     </Animated.View>
   )
 }
 
-function getMetrics(a: ActivityWithProfile, unit: 'metric' | 'imperial') {
+// ── Metrics builder ───────────────────────────────────────────
+
+function getMetrics(a: ActivityWithProfile, unit: 'metric' | 'imperial'): MetricItem[] {
   const m = a.metrics as any
-  const out: { value: string; label: string }[] = []
+  const out: MetricItem[] = []
+
   switch (a.sport_type) {
     case 'running':
     case 'cycling':
     case 'swimming': {
       const em = m as EnduranceMetrics
-      if (em.distance_m) out.push({ value: formatDistance(em.distance_m, unit), label: 'Distance' })
-      if (em.avg_pace_s_per_km) out.push({ value: formatPace(em.avg_pace_s_per_km, unit), label: 'Allure moy.' })
-      if (em.avg_heart_rate) out.push({ value: `${em.avg_heart_rate} bpm`, label: 'FC moy.' })
-      if (em.elevation_m) out.push({ value: `${Math.round(em.elevation_m)} m`, label: 'Dénivelé' })
+      if (em.distance_m)       out.push({ value: formatDistance(em.distance_m, unit),         label: 'Distance', Icon: MapPin })
+      if (em.avg_pace_s_per_km) out.push({ value: formatPace(em.avg_pace_s_per_km, unit),      label: 'Allure',   Icon: Timer })
+      if (em.avg_heart_rate)    out.push({ value: `${em.avg_heart_rate} bpm`,                  label: 'FC moy.',  Icon: Heart })
+      if (em.elevation_m)       out.push({ value: `${Math.round(em.elevation_m)} m`,           label: 'D+',       Icon: Mountain })
       break
     }
     case 'gym': {
       const gm = m as GymMetrics
       const wLabel = unit === 'imperial' ? 'lbs' : 'kg'
-      const vol = gm.total_volume_kg ? (unit === 'imperial' ? Math.round(gm.total_volume_kg * 2.20462) : Math.round(gm.total_volume_kg)) : null
-      if (vol) out.push({ value: `${vol} ${wLabel}`, label: 'Volume total' })
-      if (gm.exercises?.length) out.push({ value: String(gm.exercises.length), label: 'Exercices' })
-      const totalSets = gm.exercises?.reduce((s, e) => s + e.sets.length, 0) ?? 0
-      if (totalSets) out.push({ value: String(totalSets), label: 'Séries' })
+      const vol = gm.total_volume_kg
+        ? (unit === 'imperial' ? Math.round(gm.total_volume_kg * 2.20462) : Math.round(gm.total_volume_kg))
+        : null
+      if (vol)                out.push({ value: `${vol} ${wLabel}`, label: 'Volume',    Icon: Dumbbell })
+      if (gm.exercises?.length) out.push({ value: String(gm.exercises.length), label: 'Exercices', Icon: Target })
+      const sets = gm.exercises?.reduce((s, e) => s + e.sets.length, 0) ?? 0
+      if (sets)               out.push({ value: String(sets), label: 'Séries', Icon: Zap })
       break
     }
     case 'badminton': {
       const bm = m as BadmintonMetrics
-      const score = bm.sets.map(s => `${s.player_score}-${s.opponent_score}`).join(' / ')
-      out.push({ value: score || '—', label: 'Score' })
-      out.push({ value: bm.match_won ? '✅ Victoire' : '💪 Défaite', label: 'Résultat' })
-      break
-    }
-    case 'athletics': {
-      if (m.event) out.push({ value: m.event, label: 'Épreuve' })
-      if (m.result_value) out.push({ value: `${m.result_value} ${m.result_unit ?? ''}`, label: 'Résultat' })
-      break
-    }
-    case 'hiking': {
-      if (m.distance_m) out.push({ value: formatDistance(m.distance_m, unit), label: 'Distance' })
-      if (m.elevation_m) out.push({ value: `${Math.round(m.elevation_m)} m`, label: 'Dénivelé' })
-      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
-      break
-    }
-    case 'football': {
-      out.push({ value: m.match_won ? '✅ Victoire' : '💪 Défaite', label: 'Résultat' })
-      if (m.goals_scored !== undefined) out.push({ value: String(m.goals_scored), label: 'Buts' })
-      if (m.assists !== undefined) out.push({ value: String(m.assists), label: 'Passes déc.' })
+      const score = bm.sets?.map((s: any) => `${s.player_score}-${s.opponent_score}`).join(' / ')
+      if (score) out.push({ value: score, label: 'Score', Icon: Trophy })
+      out.push({
+        value: bm.match_won ? 'Victoire' : 'Défaite',
+        label: 'Résultat',
+        Icon: bm.match_won ? CheckCircle2 : XCircle,
+      })
       break
     }
     case 'tennis': {
       if (m.sets?.length) {
         const score = m.sets.map((s: any) => `${s.player_games}-${s.opponent_games}`).join(' / ')
-        out.push({ value: score, label: 'Score' })
+        out.push({ value: score, label: 'Score', Icon: Trophy })
       }
-      out.push({ value: m.match_won ? '✅ Victoire' : '💪 Défaite', label: 'Résultat' })
-      if (m.aces) out.push({ value: String(m.aces), label: 'Aces' })
+      out.push({ value: m.match_won ? 'Victoire' : 'Défaite', label: 'Résultat', Icon: m.match_won ? CheckCircle2 : XCircle })
+      if (m.aces) out.push({ value: String(m.aces), label: 'Aces', Icon: Zap })
+      break
+    }
+    case 'football': {
+      out.push({ value: m.match_won ? 'Victoire' : 'Défaite', label: 'Résultat', Icon: m.match_won ? CheckCircle2 : XCircle })
+      if (m.goals_scored !== undefined) out.push({ value: String(m.goals_scored), label: 'Buts',       Icon: Target })
+      if (m.assists !== undefined)      out.push({ value: String(m.assists),       label: 'Passes déc.', Icon: Star })
+      break
+    }
+    case 'hiking': {
+      if (m.distance_m)   out.push({ value: formatDistance(m.distance_m, unit), label: 'Distance', Icon: MapPin })
+      if (m.elevation_m)  out.push({ value: `${Math.round(m.elevation_m)} m`,   label: 'D+',       Icon: Mountain })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`,         label: 'FC moy.',  Icon: Heart })
+      break
+    }
+    case 'athletics': {
+      if (m.event)        out.push({ value: m.event,                                         label: 'Épreuve',  Icon: Target })
+      if (m.result_value) out.push({ value: `${m.result_value} ${m.result_unit ?? ''}`.trim(), label: 'Résultat', Icon: Trophy })
       break
     }
     case 'yoga': {
-      const STYLE_LABELS: Record<string, string> = {
+      const STYLE_MAP: Record<string, string> = {
         hatha: 'Hatha', vinyasa: 'Vinyasa', yin: 'Yin', ashtanga: 'Ashtanga', power: 'Power', other: 'Autre',
       }
-      if (m.style) out.push({ value: STYLE_LABELS[m.style] ?? m.style, label: 'Style' })
-      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
+      if (m.style)          out.push({ value: STYLE_MAP[m.style] ?? m.style, label: 'Style',   Icon: Star })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`,      label: 'FC moy.', Icon: Heart })
       break
     }
     case 'boxing': {
-      const TYPE_LABELS: Record<string, string> = {
+      const TYPE_MAP: Record<string, string> = {
         bag: 'Sac', pad_work: 'Pattes', sparring: 'Sparring', competition: 'Compétition',
       }
-      if (m.bout_type) out.push({ value: TYPE_LABELS[m.bout_type] ?? m.bout_type, label: 'Type' })
-      if (m.rounds) out.push({ value: String(m.rounds), label: 'Rounds' })
-      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`, label: 'FC moy.' })
+      if (m.bout_type)      out.push({ value: TYPE_MAP[m.bout_type] ?? m.bout_type, label: 'Type',    Icon: Target })
+      if (m.rounds)         out.push({ value: String(m.rounds),                      label: 'Rounds',  Icon: Timer })
+      if (m.avg_heart_rate) out.push({ value: `${m.avg_heart_rate} bpm`,             label: 'FC moy.', Icon: Heart })
       break
     }
   }
-  return out.slice(0, 4)
+
+  return out.slice(0, 3)
 }
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000
-  if (s < 3600) return `Il y a ${Math.floor(s / 60)} min`
-  if (s < 86400) return `Il y a ${Math.floor(s / 3600)} h`
+  if (s < 3600)   return `Il y a ${Math.floor(s / 60)} min`
+  if (s < 86400)  return `Il y a ${Math.floor(s / 3600)} h`
   if (s < 172800) return 'Hier'
   return `Il y a ${Math.floor(s / 86400)} j`
 }
+
+// ── Styles ────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   card: {
@@ -248,41 +249,32 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Shadow.sm,
   },
+
+  // Banner
   banner: {
-    height: 88,
-    overflow: 'hidden',
-    position: 'relative',
-    justifyContent: 'flex-end',
-  },
-  bannerPattern: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 10,
-    padding: 8,
-  },
-  patternChar: {
-    fontSize: 28,
-    color: '#fff',
-  },
-  bannerContent: {
+    height: 100,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    gap: 14,
   },
-  bannerEmoji: {
-    fontSize: 36,
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    flexShrink: 0,
   },
-  bannerText: { flex: 1, gap: 2 },
+  bannerText: { flex: 1, gap: 3 },
   bannerSport: {
-    fontSize: FontSize.sm,
+    fontSize: 10,
     fontWeight: FontWeight.extrabold,
-    color: 'rgba(255,255,255,0.85)',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.78)',
+    letterSpacing: 1.4,
   },
   bannerDuration: {
     fontSize: FontSize['2xl'],
@@ -291,51 +283,66 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   calBadge: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: Radius.full,
+    flexShrink: 0,
   },
-  calBadgeText: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: '#fff' },
-  header: {
+  calText: { fontSize: 11, fontWeight: FontWeight.bold, color: '#fff' },
+
+  // User row
+  userRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
+    paddingVertical: 10,
   },
-  headerText: { flex: 1 },
-  username: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
+  userInfo: { flex: 1 },
+  username: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   meta: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 1 },
-  metricGrid: {
+
+  // Metrics
+  metricRow: {
     flexDirection: 'row',
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    marginTop: Spacing.sm,
     marginHorizontal: Spacing.md,
   },
   metricCell: {
     flex: 1,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: 6,
     alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    gap: 2,
   },
-  metricValue: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  metricLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: 1 },
-  divider: { height: 1, backgroundColor: Colors.borderLight, marginHorizontal: Spacing.md },
+  metricVal: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary, marginTop: 1 },
+  metricLbl: { fontSize: 10, color: Colors.textTertiary, letterSpacing: 0.2 },
+
+  // Footer
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
-  kudosWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  kudosEmoji: { fontSize: 20 },
-  kudosText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
-  kudosActive: { color: Colors.electric },
-  sportDot: { width: 8, height: 8, borderRadius: 4 },
+  kudosBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  kudosText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textTertiary },
+  kudosActive: { color: '#FF6B35' },
+  sportPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  sportPillLabel: { fontSize: 11, fontWeight: FontWeight.bold },
 })

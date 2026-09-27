@@ -4,8 +4,9 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
-import { User, BarChart3, Dumbbell, Zap } from 'lucide-react-native'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
+import { User, BarChart3, Dumbbell, Zap, PersonStanding, Flame } from 'lucide-react-native'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
+import { SPORTS_CONFIG } from '@/constants/sports'
 import { useActivities } from '@/hooks/useActivities'
 import { useSession } from '@/hooks/useProfile'
 import { useSkills } from '@/hooks/useSkills'
@@ -27,16 +28,6 @@ const SUB_TABS: { key: SubTab; label: string; Icon: any }[] = [
   { key: 'coach',      label: 'Coach',     Icon: Zap },
 ]
 
-const SPORT_EMOJI: Record<string, string> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
-  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
-  hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
-const SPORT_LABEL: Record<string, string> = {
-  running: 'Course', cycling: 'Vélo', swimming: 'Natation', gym: 'Muscu',
-  badminton: 'Badminton', athletics: 'Athlétisme', football: 'Football',
-  tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
-}
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000
@@ -88,7 +79,9 @@ function ActivitiesTab() {
   if (!activities.length) {
     return (
       <View style={act.empty}>
-        <Text style={act.emptyEmoji}>🏃</Text>
+        <View style={act.emptyIcon}>
+          <PersonStanding size={30} color={Colors.textTertiary} strokeWidth={1.5} />
+        </View>
         <Text style={act.emptyTitle}>Aucune activité</Text>
         <Text style={act.emptySub}>Lance ta première séance pour la voir ici</Text>
       </View>
@@ -107,23 +100,25 @@ function ActivitiesTab() {
 }
 
 function ActivityRow({ activity }: { activity: any }) {
-  const sport = activity.sport_type as SportType
-  const color = (SportColors as any)[sport] ?? Colors.electric
-  const emoji = SPORT_EMOJI[sport] ?? '🏃'
+  const sportConfig = SPORTS_CONFIG[activity.sport_type as SportType] ?? SPORTS_CONFIG.running
+  const { color, Icon: SportIcon } = sportConfig
 
   return (
     <View style={act.row}>
       <View style={[act.iconWrap, { backgroundColor: color + '20' }]}>
-        <Text style={act.icon}>{emoji}</Text>
+        <SportIcon size={22} color={color} strokeWidth={1.8} />
       </View>
       <View style={act.info}>
-        <Text style={act.sport}>{SPORT_LABEL[sport] ?? sport}</Text>
+        <Text style={act.sport}>{sportConfig.labelLong}</Text>
         <Text style={act.date}>{timeAgo(activity.created_at)}</Text>
       </View>
       <View style={act.right}>
         <Text style={act.duration}>{formatDurationLong(activity.duration_seconds)}</Text>
         {!!activity.calories_burned && (
-          <Text style={act.cals}>🔥 {activity.calories_burned} kcal</Text>
+          <View style={act.calsRow}>
+            <Flame size={10} color="#FF6B35" strokeWidth={2} />
+            <Text style={act.cals}>{activity.calories_burned} kcal</Text>
+          </View>
         )}
       </View>
     </View>
@@ -214,7 +209,17 @@ const act = StyleSheet.create({
     gap: Spacing.sm,
     padding: Spacing.xl,
   },
-  emptyEmoji: { fontSize: 48 },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.bgAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginBottom: 4,
+  },
   emptyTitle: {
     fontSize: FontSize.lg,
     fontWeight: FontWeight.bold,
@@ -243,11 +248,11 @@ const act = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  icon: { fontSize: 22 },
   info: { flex: 1, gap: 2 },
   sport: { fontSize: FontSize.md, fontWeight: FontWeight.semibold, color: Colors.textPrimary },
   date: { fontSize: FontSize.xs, color: Colors.textTertiary },
   right: { alignItems: 'flex-end', gap: 2 },
   duration: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  cals: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  calsRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  cals: { fontSize: FontSize.xs, color: Colors.textTertiary },
 })
