@@ -23,7 +23,7 @@ import * as Haptics from 'expo-haptics'
 import {
   X,
   PersonStanding, Bike, Waves, Mountain, Dumbbell,
-  CircleDot, Zap, Shield, Timer, Flower2,
+  CircleDot, Zap, Feather, Activity, Timer, Flower2,
   Play, Pause, RotateCcw,
   MapPin, Heart, TrendingUp, Clock,
   Swords, Target, Trophy,
@@ -54,9 +54,9 @@ const SPORTS: SportConfig[] = [
   { key: 'gym',       label: 'Muscu',       color: '#0055FF', Icon: Dumbbell },
   { key: 'football',  label: 'Football',    color: '#22C55E', Icon: CircleDot },
   { key: 'tennis',    label: 'Tennis',      color: '#EAB308', Icon: Zap },
-  { key: 'badminton', label: 'Badminton',   color: '#10B981', Icon: Shield },
+  { key: 'badminton', label: 'Badminton',   color: '#10B981', Icon: Feather },
   { key: 'boxing',    label: 'Boxe',        color: '#DC2626', Icon: Swords },
-  { key: 'athletics', label: 'Athlétisme',  color: '#F59E0B', Icon: Timer },
+  { key: 'athletics', label: 'Athlétisme',  color: '#F59E0B', Icon: Activity },
   { key: 'yoga',      label: 'Yoga',        color: '#EC4899', Icon: Flower2 },
 ]
 
@@ -235,10 +235,13 @@ export default function AddActivityModal() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── Sport selector ───────────────────── */}
-        <SectionLabel label={t.activity.selectSport} />
+        <View style={styles.sportSectionHeader}>
+          <Text style={styles.sportSectionTitle}>Quelle activité ?</Text>
+          <Text style={styles.sportSectionSub}>Choisissez votre discipline</Text>
+        </View>
         <View style={styles.sportGrid}>
           {SPORTS.map(s => (
-            <SportChip key={s.key} sport={s} active={sport === s.key} onPress={() => setSport(s.key)} />
+            <SportCard key={s.key} sport={s} active={sport === s.key} onPress={() => setSport(s.key)} />
           ))}
         </View>
 
@@ -807,26 +810,35 @@ function SmallField({ value, onChange, placeholder }: { value: string; onChange:
   )
 }
 
-function SportChip({ sport, active, onPress }: { sport: SportConfig; active: boolean; onPress: () => void }) {
+function SportCard({ sport, active, onPress }: { sport: SportConfig; active: boolean; onPress: () => void }) {
   const scale = useSharedValue(1)
-
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-    backgroundColor: active ? sport.color : `${sport.color}14`,
-    borderColor: active ? sport.color : `${sport.color}30`,
-    borderWidth: 1.5,
   }))
 
   return (
     <TouchableOpacity
       onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress() }}
-      onPressIn={() => { scale.value = withSpring(0.93, { damping: 12, stiffness: 500 }) }}
+      onPressIn={() => { scale.value = withSpring(0.94, { damping: 12, stiffness: 500 }) }}
       onPressOut={() => { scale.value = withSpring(1, { damping: 10, stiffness: 300 }) }}
       activeOpacity={1}
+      style={cardStyles.wrap}
     >
-      <Animated.View style={[chipStyles.chip, animStyle]}>
-        <sport.Icon size={22} color={active ? '#FFFFFF' : sport.color} strokeWidth={2} />
-        <Text style={[chipStyles.label, { color: active ? '#FFFFFF' : sport.color, fontWeight: active ? FontWeight.bold : FontWeight.semibold }]}>
+      <Animated.View style={[
+        cardStyles.card,
+        active ? cardStyles.cardActive : cardStyles.cardInactive,
+        animStyle,
+      ]}>
+        <View style={[
+          cardStyles.iconCircle,
+          active ? cardStyles.iconCircleActive : { backgroundColor: sport.color + '18' },
+        ]}>
+          <sport.Icon size={26} color={active ? '#FFFFFF' : sport.color} strokeWidth={2} />
+        </View>
+        <Text
+          style={[cardStyles.label, active ? cardStyles.labelActive : cardStyles.labelDefault]}
+          numberOfLines={1}
+        >
           {sport.label}
         </Text>
       </Animated.View>
@@ -897,6 +909,20 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     paddingBottom: 120,
     gap: Spacing.md,
+  },
+  sportSectionHeader: {
+    gap: 3,
+  },
+  sportSectionTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.extrabold,
+    color: Colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  sportSectionSub: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.medium,
+    color: Colors.textTertiary,
   },
   sportGrid: {
     flexDirection: 'row',
@@ -1045,21 +1071,48 @@ const fieldStyles = StyleSheet.create({
   },
 })
 
-const chipStyles = StyleSheet.create({
-  chip: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: Radius.lg,
-    gap: 6,
-    flexBasis: '30%',
+const cardStyles = StyleSheet.create({
+  wrap: {
+    width: '31.5%',
     flexGrow: 1,
   },
+  card: {
+    borderRadius: Radius.lg,
+    padding: 14,
+    paddingBottom: 14,
+    gap: 10,
+    alignItems: 'flex-start',
+    minHeight: 100,
+    ...Shadow.sm,
+  },
+  cardActive: {
+    backgroundColor: Colors.electric,
+  },
+  cardInactive: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  iconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleActive: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
   label: {
-    fontSize: 11,
-    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
     letterSpacing: 0.1,
+  },
+  labelActive: {
+    color: '#FFFFFF',
+  },
+  labelDefault: {
+    color: Colors.textPrimary,
   },
 })
 
