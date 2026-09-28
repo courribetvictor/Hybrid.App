@@ -5,8 +5,8 @@ export const Colors = {
   electricDim: 'rgba(0,85,255,0.10)',
 
   // ── Backgrounds ────────────────────────────
-  bg: '#F5F7FF',        // Très légèrement bleuté — les cartes blanches ressortent mieux
-  bgAlt: '#EEF2FF',
+  bg: '#EEF3FF',        // Fond bleu-gris très clair — les cartes blanches ressortent nettement
+  bgAlt: '#E4ECFF',
   bgCard: '#FFFFFF',
   bgElevated: '#FFFFFF',
 
@@ -69,32 +69,32 @@ export const Radius = {
 
 export const Shadow = {
   sm: {
-    shadowColor: '#0055FF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowColor: '#1A1A4E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
+    elevation: 3,
   },
   md: {
-    shadowColor: '#0055FF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 16,
-    elevation: 4,
+    shadowColor: '#1A1A4E',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.13,
+    shadowRadius: 20,
+    elevation: 6,
   },
   lg: {
     shadowColor: '#0055FF',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 28,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.20,
+    shadowRadius: 32,
+    elevation: 12,
   },
   glow: {
     shadowColor: '#0055FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.40,
+    shadowRadius: 22,
+    elevation: 10,
   },
 } as const
 

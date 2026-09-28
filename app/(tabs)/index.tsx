@@ -17,6 +17,9 @@ import Animated, {
 } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import {
+  Search, Bell, PenLine, Plus, Flame, Target, Timer, MapPin, Zap,
+} from 'lucide-react-native'
 import { ScreenHeader, HeaderIconBtn } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { ActivityCard } from '@/components/feed/ActivityCard'
@@ -79,6 +82,7 @@ export default function FeedScreen() {
   const [postModalVisible, setPostModalVisible] = useState(false)
   const scrollY = useSharedValue(0)
   const fabScale = useSharedValue(1)
+  const postBarScale = useSharedValue(1)
 
   const scrollHandler = useAnimatedScrollHandler(e => {
     scrollY.value = e.contentOffset.y
@@ -89,6 +93,10 @@ export default function FeedScreen() {
       { scale: interpolate(scrollY.value, [0, 60], [1, 0.88], Extrapolation.CLAMP) },
       { scale: fabScale.value },
     ],
+  }))
+
+  const postBarAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: postBarScale.value }],
   }))
 
   // Merge posts + activities into ranked feed
@@ -122,9 +130,12 @@ export default function FeedScreen() {
   }, [fabScale])
 
   const handlePostBtn = useCallback(() => {
+    postBarScale.value = withSpring(0.96, { damping: 15, stiffness: 500 }, () => {
+      postBarScale.value = withSpring(1, { damping: 12, stiffness: 300 })
+    })
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     setPostModalVisible(true)
-  }, [])
+  }, [postBarScale])
 
   const handleRefresh = useCallback(() => {
     refetchActs()
@@ -166,11 +177,13 @@ export default function FeedScreen() {
       <MiniCalendar activities={ownActivities as Activity[]} />
       <WeekSummaryBanner activities={weekActivities} goal={goal} streak={streak} />
       {/* Post bar — compact, minimal */}
-      <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.85}>
-        <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={28} />
-        <Text style={feedStyles.postBarHint}>Quoi de neuf ?</Text>
-        <Text style={feedStyles.postBarIcon}>✏️</Text>
-      </TouchableOpacity>
+      <Animated.View style={postBarAnimStyle}>
+        <TouchableOpacity style={feedStyles.postBar} onPress={handlePostBtn} activeOpacity={0.92}>
+          <Avatar uri={profile?.avatar_url} username={profile?.username ?? '?'} size={28} />
+          <Text style={feedStyles.postBarHint}>Quoi de neuf ?</Text>
+          <PenLine size={15} color={Colors.textTertiary} strokeWidth={2} />
+        </TouchableOpacity>
+      </Animated.View>
     </>
   )
 
@@ -180,8 +193,15 @@ export default function FeedScreen() {
         title="Accueil"
         right={
           <>
-            <HeaderIconBtn icon="🔍" onPress={() => router.push('/modals/search' as any)} />
-            <HeaderIconBtn icon="🔔" onPress={() => router.push('/modals/notifications' as any)} badge />
+            <HeaderIconBtn
+              icon={<Search size={17} color={Colors.textSecondary} strokeWidth={2} />}
+              onPress={() => router.push('/modals/search' as any)}
+            />
+            <HeaderIconBtn
+              icon={<Bell size={17} color={Colors.textSecondary} strokeWidth={2} />}
+              onPress={() => router.push('/modals/notifications' as any)}
+              badge
+            />
             <TouchableOpacity
               onPress={() => router.push('/vous' as any)}
               activeOpacity={0.8}
@@ -216,7 +236,7 @@ export default function FeedScreen() {
 
       <Animated.View style={[styles.fab, fabStyle]}>
         <TouchableOpacity style={styles.fabInner} onPress={handleFab} activeOpacity={0.9}>
-          <Text style={styles.fabIcon}>+</Text>
+          <Plus size={28} color="#fff" strokeWidth={2.5} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -337,17 +357,14 @@ function MiniCalendar({ activities }: { activities: Activity[] }) {
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 
-const SPORT_EMOJI: Partial<Record<SportType, string>> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
-  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
-  hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
-
 const GOAL_TYPE_LABEL: Record<string, string> = {
   sessions: 'séances', minutes: 'min', km: 'km',
 }
-const GOAL_TYPE_EMOJI: Record<string, string> = {
-  sessions: '🏅', minutes: '⏱', km: '📍',
+
+const GOAL_ICON: Record<string, React.ComponentType<{ size: number; color: string; strokeWidth?: number }>> = {
+  sessions: Target,
+  minutes:  Timer,
+  km:       MapPin,
 }
 
 function computeGoalProgress(goal: GoalConfig, activities: Activity[]): { current: number; progress: number } {
@@ -442,9 +459,12 @@ function WeekSummaryBanner({
             streak >= 30 && bannerStyles.streakBadgeGold,
             streak >= 7  && streak < 30 && bannerStyles.streakBadgeSilver,
           ]}>
-            <Text style={bannerStyles.streakEmoji}>
-              {streak >= 30 ? '🔥🔥🔥' : streak >= 14 ? '🔥🔥' : '🔥'}
-            </Text>
+            <Flame
+              size={streak >= 14 ? 20 : 18}
+              color={streak >= 30 ? '#B45309' : '#EA580C'}
+              fill={streak >= 30 ? '#B45309' : '#EA580C'}
+              strokeWidth={1}
+            />
             <Text style={[
               bannerStyles.streakCount,
               streak >= 30 && { color: '#B45309' },
@@ -484,17 +504,20 @@ function WeekSummaryBanner({
       </View>
 
       {/* Goal bar */}
-      {goal !== null && goalResult !== null && (
-        <View style={bannerStyles.goalRow}>
-          <Text style={bannerStyles.goalLabel}>
-            {GOAL_TYPE_EMOJI[goal.type]} {goalResult.current}/{goal.value} {GOAL_TYPE_LABEL[goal.type]}
-            {goalProgress === 1 ? ' 🎉' : ''}
-          </Text>
-          <View style={bannerStyles.goalBarOuter}>
-            <View style={[bannerStyles.goalBarFill, { width: `${(goalProgress ?? 0) * 100}%` as any }]} />
+      {goal !== null && goalResult !== null && (() => {
+        const GoalIcon = GOAL_ICON[goal.type]
+        return (
+          <View style={bannerStyles.goalRow}>
+            <GoalIcon size={12} color={goalProgress === 1 ? Colors.success : Colors.electric} strokeWidth={2} />
+            <Text style={bannerStyles.goalLabel}>
+              {goalResult.current}/{goal.value} {GOAL_TYPE_LABEL[goal.type]}
+            </Text>
+            <View style={bannerStyles.goalBarOuter}>
+              <View style={[bannerStyles.goalBarFill, { width: `${(goalProgress ?? 0) * 100}%` as any, backgroundColor: goalProgress === 1 ? Colors.success : Colors.electric }]} />
+            </View>
           </View>
-        </View>
-      )}
+        )
+      })()}
     </View>
   )
 }
@@ -504,7 +527,9 @@ function WeekSummaryBanner({
 function EmptyFeed() {
   return (
     <View style={emptyStyles.wrap}>
-      <Text style={emptyStyles.emoji}>⚡</Text>
+      <View style={emptyStyles.iconWrap}>
+        <Zap size={36} color={Colors.electric} strokeWidth={1.5} />
+      </View>
       <Text style={emptyStyles.title}>Aucune activité dans le feed</Text>
       <Text style={emptyStyles.sub}>Ajoute des amis dans l'Arène pour voir leurs séances ici.</Text>
     </View>
@@ -520,18 +545,18 @@ const feedStyles = StyleSheet.create({
     gap: Spacing.sm,
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.full,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    ...Shadow.sm,
   },
   postBarHint: {
     flex: 1,
     fontSize: FontSize.sm,
     color: Colors.textTertiary,
   },
-  postBarIcon: { fontSize: 15, opacity: 0.5 },
 })
 
 const styles = StyleSheet.create({
@@ -547,7 +572,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.lg,
   },
-  fabIcon: { fontSize: 30, color: '#fff', lineHeight: 34, fontWeight: '300' },
 })
 
 const bannerStyles = StyleSheet.create({
@@ -583,7 +607,7 @@ const bannerStyles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FB923C',
     minWidth: 52,
-    gap: 1,
+    gap: 2,
   },
   streakBadgeSilver: {
     backgroundColor: '#FEF3C7',
@@ -593,7 +617,6 @@ const bannerStyles = StyleSheet.create({
     backgroundColor: '#FFFBEB',
     borderColor: '#D97706',
   },
-  streakEmoji: { fontSize: 16, lineHeight: 20 },
   streakCount: {
     fontSize: 22,
     fontWeight: FontWeight.extrabold,
@@ -627,12 +650,12 @@ const bannerStyles = StyleSheet.create({
   goalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   goalLabel: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    minWidth: 90,
+    minWidth: 72,
   },
   goalBarOuter: {
     flex: 1,
@@ -641,7 +664,7 @@ const bannerStyles = StyleSheet.create({
     borderRadius: 3,
     overflow: 'hidden',
   },
-  goalBarFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 3 },
+  goalBarFill: { height: '100%', borderRadius: 3 },
 })
 
 const calStyles = StyleSheet.create({
@@ -708,7 +731,15 @@ const calStyles = StyleSheet.create({
 
 const emptyStyles = StyleSheet.create({
   wrap: { alignItems: 'center', paddingTop: 72, gap: Spacing.sm, paddingHorizontal: Spacing.xl },
-  emoji: { fontSize: 44 },
+  iconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.electricDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
   title: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.textPrimary, textAlign: 'center' },
   sub: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', lineHeight: 20 },
 })

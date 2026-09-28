@@ -1,15 +1,15 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native'
+import Animated, {
+  useSharedValue, useAnimatedStyle, withSpring, withSequence,
+} from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import { Heart } from 'lucide-react-native'
 import { Avatar } from '@/components/ui/Avatar'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
+import { SPORTS_CONFIG } from '@/constants/sports'
+import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import type { PostWithProfile, SportType } from '@/types/database'
 
-const SPORT_EMOJI: Record<SportType, string> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
-  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
-  hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
 const SPORT_LABEL: Record<SportType, string> = {
   running: 'Course', cycling: 'Vélo', swimming: 'Natation', gym: 'Muscu',
   badminton: 'Badminton', athletics: 'Athlétisme', football: 'Football',
@@ -34,14 +34,23 @@ interface PostCardProps {
 export function PostCard({ post, currentUserId, onLike, onDelete }: PostCardProps) {
   const [liked, setLiked] = useState(post.liked_by_me)
   const [count, setCount] = useState(post.likes_count)
+  const heartScale = useSharedValue(1)
 
-  const handleLike = () => {
+  const likeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heartScale.value }],
+  }))
+
+  const handleLike = useCallback(() => {
+    heartScale.value = withSequence(
+      withSpring(1.4, { damping: 5, stiffness: 600 }),
+      withSpring(1, { damping: 12, stiffness: 300 }),
+    )
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     const next = !liked
     setLiked(next)
     setCount(c => c + (next ? 1 : -1))
     onLike(post.id)
-  }
+  }, [liked, onLike, post.id, heartScale])
 
   const handleLongPress = () => {
     if (post.user_id !== currentUserId || !onDelete) return
@@ -51,6 +60,9 @@ export function PostCard({ post, currentUserId, onLike, onDelete }: PostCardProp
       { text: 'Supprimer', style: 'destructive', onPress: () => onDelete(post.id) },
     ])
   }
+
+  const sportConfig = post.sport_type ? SPORTS_CONFIG[post.sport_type as SportType] : null
+  const SportIcon = sportConfig?.Icon
 
   return (
     <TouchableOpacity
@@ -70,10 +82,10 @@ export function PostCard({ post, currentUserId, onLike, onDelete }: PostCardProp
           <Text style={styles.username}>{post.profiles?.username ?? '…'}</Text>
           <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
         </View>
-        {post.sport_type && (
-          <View style={[styles.sportBadge, { backgroundColor: SportColors[post.sport_type as SportType] + '20' }]}>
-            <Text style={styles.sportEmoji}>{SPORT_EMOJI[post.sport_type as SportType]}</Text>
-            <Text style={[styles.sportLabel, { color: SportColors[post.sport_type as SportType] }]}>
+        {sportConfig && SportIcon && (
+          <View style={[styles.sportBadge, { backgroundColor: sportConfig.color + '1A' }]}>
+            <SportIcon size={12} color={sportConfig.color} strokeWidth={2} />
+            <Text style={[styles.sportLabel, { color: sportConfig.color }]}>
               {SPORT_LABEL[post.sport_type as SportType]}
             </Text>
           </View>
@@ -91,9 +103,14 @@ export function PostCard({ post, currentUserId, onLike, onDelete }: PostCardProp
       {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.likeBtn} onPress={handleLike} activeOpacity={0.75}>
-          <Text style={[styles.likeIcon, liked && styles.likeIconActive]}>
-            {liked ? '❤️' : '🤍'}
-          </Text>
+          <Animated.View style={likeAnimStyle}>
+            <Heart
+              size={16}
+              color={liked ? '#EF4444' : Colors.textTertiary}
+              fill={liked ? '#EF4444' : 'none'}
+              strokeWidth={2}
+            />
+          </Animated.View>
           <Text style={[styles.likeCount, liked && styles.likeCountActive]}>
             {count > 0 ? count : ''}
           </Text>
@@ -127,12 +144,11 @@ const styles = StyleSheet.create({
   sportBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: Radius.full,
   },
-  sportEmoji: { fontSize: 13 },
   sportLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold },
   content: {
     fontSize: FontSize.md,
@@ -148,14 +164,12 @@ const styles = StyleSheet.create({
   likeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
     backgroundColor: Colors.bgAlt,
   },
-  likeIcon: { fontSize: 16 },
-  likeIconActive: {},
   likeCount: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: FontWeight.semibold },
   likeCountActive: { color: Colors.error },
   hint: { fontSize: FontSize.xs, color: Colors.textTertiary, flex: 1 },

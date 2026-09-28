@@ -1,8 +1,13 @@
-import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import React, { useCallback } from 'react'
+import { View, Text, StyleSheet, Pressable } from 'react-native'
+import Animated, {
+  useSharedValue, useAnimatedStyle, withSpring,
+} from 'react-native-reanimated'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Spacing } from '@/constants/theme'
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
 interface ScreenHeaderProps {
   title: string
@@ -38,12 +43,31 @@ export function ScreenHeader({ title, subtitle, right, border = true, accent = f
 
 export function HeaderIconBtn({
   icon, onPress, badge,
-}: { icon: string; onPress?: () => void; badge?: boolean }) {
+}: { icon: React.ReactNode; onPress?: () => void; badge?: boolean }) {
+  const scale = useSharedValue(1)
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  const handlePressIn = useCallback(() => {
+    scale.value = withSpring(0.88, { damping: 12, stiffness: 500 })
+  }, [scale])
+
+  const handlePressOut = useCallback(() => {
+    scale.value = withSpring(1, { damping: 10, stiffness: 300 })
+  }, [scale])
+
   return (
-    <TouchableOpacity style={styles.iconBtn} onPress={onPress} activeOpacity={0.7}>
-      <Text style={styles.iconBtnText}>{icon}</Text>
+    <AnimatedPressable
+      style={[animStyle, styles.iconBtn]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      {icon}
       {badge && <View style={styles.badge} />}
-    </TouchableOpacity>
+    </AnimatedPressable>
   )
 }
 
@@ -97,7 +121,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  iconBtnText: { fontSize: 17 },
   badge: {
     position: 'absolute',
     top: 7,
