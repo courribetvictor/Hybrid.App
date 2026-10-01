@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
+import { useSession } from '@/hooks/useProfile'
+import { supabase } from '@/lib/supabase'
 
 const SETTINGS = [
   {
@@ -40,13 +42,24 @@ const SETTINGS = [
 ]
 
 export default function NotificationsScreen() {
-  const [settings, setSettings] = useState<Record<string, boolean>>(
-    Object.fromEntries(SETTINGS.map(s => [s.id, s.default])),
-  )
+  const { userId } = useSession()
+  const defaults = Object.fromEntries(SETTINGS.map(s => [s.id, s.default])) as Record<string, boolean>
+  const [settings, setSettings] = useState<Record<string, boolean>>(defaults)
 
-  const toggle = (id: string) => {
+  useEffect(() => {
+    if (!userId) return
+    supabase.from('user_preferences').select('notifications').eq('user_id', userId).maybeSingle().then(({ data }) => {
+      if (data?.notifications) setSettings({ ...defaults, ...(data.notifications as any) })
+    })
+  }, [userId])
+
+  const toggle = async (id: string) => {
+    if (!userId) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    setSettings(prev => ({ ...prev, [id]: !prev[id] }))
+    const next = { ...settings, [id]: !settings[id] }
+    setSettings(next)
+    const { error } = await supabase.from('user_preferences').upsert({ user_id: userId, notifications: next } as any)
+    if (error) setSettings(settings)
   }
 
   return (
@@ -83,7 +96,7 @@ export default function NotificationsScreen() {
         </View>
 
         <Text style={styles.note}>
-          Les notifications push arrivent dans la prochaine mise à jour. Tes préférences seront prises en compte automatiquement.
+          Tes préférences sont synchronisées avec ton compte. L’envoi push nécessite la configuration d’Expo Notifications côté serveur.
         </Text>
       </ScrollView>
     </SafeAreaView>
