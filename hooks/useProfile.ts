@@ -1,83 +1,28 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
 
-export function useProfile(userId: string | undefined) {
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetch = useCallback(async () => {
-    if (!userId) return
-    setLoading(true)
-    setError(null)
-    const { data, error: err } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    if (err?.code === 'PGRST116') {
-      await (supabase as any).rpc('ensure_profile')
-      const { data: recovered } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      setProfile(recovered)
-    } else if (err) {
-      setError(err.message)
-    } else {
-      setProfile(data)
-    }
-    setLoading(false)
-  }, [userId])
-
-  useEffect(() => { fetch() }, [fetch])
-
-  const updateProfile = useCallback(
-    async (updates: Partial<Omit<Profile, 'id' | 'created_at'>>) => {
-      if (!userId) return
-      // Optimistic update first so the UI responds instantly
-      setProfile(prev => prev ? { ...prev, ...updates } : prev)
-      const { error: err } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId)
-      if (err) {
-        // Revert optimistic update — refetch real state from DB
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single()
-          .then(({ data }) => { if (data) setProfile(data) })
-        throw new Error(err.message)
-      }
-      // Success — trust the optimistic update, no refetch needed
-    },
-    [userId],
-  )
-
-  return { profile, loading, error, refetch: fetch, updateProfile }
+export function useSession(){
+  const [userId,setUserId]=useState<string|null>(null),[email,setEmail]=useState<string|null>(null),[ready,setReady]=useState(false)
+  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setUserId(data.session?.user.id??null);setEmail(data.session?.user.email??null);setReady(true)}).catch(()=>setReady(true));const{data}=supabase.auth.onAuthStateChange((_e,s)=>{setUserId(s?.user.id??null);setEmail(s?.user.email??null);setReady(true)});return()=>data.subscription.unsubscribe()},[])
+  return{userId,email,ready}
 }
 
-export function useSession() {
-  const [userId, setUserId] = useState<string | null>(null)
-  const [email, setEmail]   = useState<string | null>(null)
-  const [ready, setReady]   = useState(false)
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUserId(data.session?.user.id ?? null)
-      setEmail(data.session?.user.email ?? null)
-      setReady(true)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user.id ?? null)
-      setEmail(session?.user.email ?? null)
-    })
-    return () => listener.subscription.unsubscribe()
-  }, [])
-
-  return { userId, email, ready }
+export function useProfile(userId?:string){
+  const [profile,setProfile]=useState<Profile|null>(null),[loading,setLoading]=useState(false)
+  const refetch=useCallback(async()=>{
+    if(!userId){setProfile(null);return}
+    setLoading(true)
+    const {data,error}=await supabase.rpc('get_my_profile')
+    if(!error){const row=Array.isArray(data)?data[0]:data;setProfile((row??null) as any)} else {const fallback=await supabase.from('profiles').select('*').eq('id',userId).maybeSingle();if(!fallback.error)setProfile(fallback.data as Profile|null)}
+    setLoading(false)
+  },[userId])
+  useEffect(()=>{refetch()},[refetch])
+  const updateProfile=useCallback(async(updates:Partial<Profile>)=>{
+    if(!userId)return
+    const{error}=await supabase.from('profiles').update(updates as any).eq('id',userId)
+    if(error)throw error
+    await refetch()
+  },[userId,refetch])
+  return{profile,loading,refetch,updateProfile}
 }
