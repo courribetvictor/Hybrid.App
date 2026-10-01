@@ -15,7 +15,7 @@ export function usePostFeed(userId: string | undefined, followingIds: string[]) 
 
       const { data: rawPosts } = await (supabase as any)
         .from('posts')
-        .select('*, profiles(username, avatar_url, is_pro)')
+        .select('*, profile:profiles!user_id(id, username, avatar_url, is_pro)')
         .gte('created_at', since.toISOString())
         .order('created_at', { ascending: false })
         .limit(60)
@@ -52,7 +52,7 @@ export function usePostFeed(userId: string | undefined, followingIds: string[]) 
       const { data, error } = await (supabase as any)
         .from('posts')
         .insert({ user_id: userId, content, sport_type: sportType ?? null, media_url: mediaUrl ?? null })
-        .select('*, profiles(username, avatar_url, is_pro)')
+        .select('*, profile:profiles!user_id(id, username, avatar_url, is_pro)')
         .single()
       if (!error && data) {
         const newPost: PostWithProfile = { ...(data as any), liked_by_me: false }

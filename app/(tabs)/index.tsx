@@ -23,8 +23,12 @@ import {
 import { ScreenHeader, HeaderIconBtn } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { ActivityCard } from '@/components/feed/ActivityCard'
+import { TodayDashboard } from '@/components/home/TodayDashboard'
+import { HybridMissions } from '@/components/home/HybridMissions'
 import { PostCard } from '@/components/feed/PostCard'
 import { CreatePostModal } from '@/components/feed/CreatePostModal'
+import { FeedSkeleton } from '@/components/v6/FeedSkeleton'
+import { SensoryPressable } from '@/components/v6/SensoryPressable'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing, SportColors } from '@/constants/theme'
 import { useFriendFeed, useActivities } from '@/hooks/useActivities'
 import { useFriendships } from '@/hooks/useFriendships'
@@ -45,7 +49,7 @@ const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<FeedItem>)
 
 function computeStreak(activities: Activity[]): number {
   if (!activities.length) return 0
-  const days = new Set(activities.map(a => a.created_at.split('T')[0]))
+  const days = new Set(activities.map(a => (a.performed_at ?? a.created_at).split('T')[0]))
   const today = new Date()
 
   for (let offset = 0; offset <= 1; offset++) {
@@ -111,7 +115,7 @@ export default function FeedScreen() {
     })
 
     const actItems: FeedItem[] = (activityFeed as ActivityWithProfile[]).map(a => {
-      const ageH = (now - new Date(a.created_at).getTime()) / 3_600_000
+      const ageH = (now - new Date(a.performed_at ?? a.created_at).getTime()) / 3_600_000
       const score = (followSet.has(a.user_id) ? 200 : 0) + Math.max(0, 1 - ageH / 168) * 60
       return { kind: 'activity', data: a, id: `act_${a.id}`, score } as any
     })
@@ -166,7 +170,7 @@ export default function FeedScreen() {
     const monday = new Date()
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
     monday.setHours(0, 0, 0, 0)
-    return (ownActivities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+    return (ownActivities as Activity[]).filter(a => new Date(a.performed_at ?? a.created_at) >= monday)
   }, [ownActivities])
 
   // Streak computed over 365 days (not just this week)
@@ -174,6 +178,8 @@ export default function FeedScreen() {
 
   const header = (
     <>
+      <TodayDashboard activities={ownActivities as Activity[]} profile={profile} />
+      <HybridMissions activities={ownActivities as Activity[]} />
       <MiniCalendar activities={ownActivities as Activity[]} />
       <WeekSummaryBanner activities={weekActivities} goal={goal} streak={streak} />
       {/* Post bar — compact, minimal */}
@@ -202,18 +208,14 @@ export default function FeedScreen() {
               onPress={() => router.push('/modals/notifications' as any)}
               badge
             />
-            <TouchableOpacity
-              onPress={() => router.push('/vous' as any)}
-              activeOpacity={0.8}
-              style={{ marginLeft: 2 }}
-            >
+            <SensoryPressable onPress={() => router.push('/vous' as any)} event="selection" style={{ marginLeft: 2 }}>
               <Avatar
                 uri={profile?.avatar_url}
                 username={profile?.username ?? email?.split('@')[0] ?? 'U'}
                 isPro={profile?.is_pro}
                 size={34}
               />
-            </TouchableOpacity>
+            </SensoryPressable>
           </>
         }
       />
@@ -225,7 +227,7 @@ export default function FeedScreen() {
         contentContainerStyle={styles.list}
         ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
         ListHeaderComponent={header}
-        ListEmptyComponent={loading ? null : <EmptyFeed />}
+        ListEmptyComponent={loading ? <FeedSkeleton /> : <EmptyFeed />}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor={Colors.electric} />
         }
@@ -266,7 +268,7 @@ function MiniCalendar({ activities }: { activities: Activity[] }) {
   const activeDays = useMemo(() => {
     const map: Record<string, SportType> = {}
     for (const a of activities) {
-      const d = a.created_at.split('T')[0]
+      const d = (a.performed_at ?? a.created_at).split('T')[0]
       if (!map[d]) map[d] = a.sport_type
     }
     return map
@@ -417,14 +419,14 @@ function WeekSummaryBanner({
   )
 
   const activeDays = useMemo(
-    () => new Set(activities.map(a => a.created_at.split('T')[0])),
+    () => new Set(activities.map(a => (a.performed_at ?? a.created_at).split('T')[0])),
     [activities],
   )
 
   const sportsByDay = useMemo(() => {
     const map: Record<string, SportType> = {}
     for (const a of activities) {
-      const day = a.created_at.split('T')[0]
+      const day = (a.performed_at ?? a.created_at).split('T')[0]
       if (!map[day]) map[day] = a.sport_type
     }
     return map

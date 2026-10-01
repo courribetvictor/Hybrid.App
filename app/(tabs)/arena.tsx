@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react'
+import { router } from 'expo-router'
 import {
   View,
   Text,
@@ -22,13 +23,16 @@ import Animated, {
 } from 'react-native-reanimated'
 import {
   Trophy, Calendar, Globe, Users, Building2, Search,
-  Zap, PersonStanding, UserPlus, Compass, User,
+  Zap, PersonStanding, UserPlus, Compass, User, Radio, Shield, ChevronRight,
 } from 'lucide-react-native'
 import { LeaderboardRow } from '@/components/arena/LeaderboardRow'
 import { ChallengeCard } from '@/components/arena/ChallengeCard'
 import { PaywallModal } from '@/components/arena/PaywallModal'
 import { FriendSearch } from '@/components/arena/FriendSearch'
 import { Avatar } from '@/components/ui/Avatar'
+import { GradeBadge } from '@/components/ui/GradeBadge'
+import { SensoryPressable } from '@/components/v6/SensoryPressable'
+import { SectionReveal } from '@/components/v6/SectionReveal'
 import { SPORTS_CONFIG, type LucideIcon } from '@/constants/sports'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { useGlobalLeaderboard, useClubLeaderboard, useWeeklyLeaderboard } from '@/hooks/useLeaderboard'
@@ -36,6 +40,7 @@ import { useWeeklyChallenges } from '@/hooks/useWeeklyChallenges'
 import { useFriendships } from '@/hooks/useFriendships'
 import { useFollows } from '@/hooks/useFollows'
 import { useProfile, useSession } from '@/hooks/useProfile'
+import { useCurrentSeason } from '@/hooks/useSeason'
 import { useT } from '@/lib/i18n'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong } from '@/lib/units'
@@ -64,6 +69,7 @@ export default function ArenaScreen() {
   const t = useT()
   const { userId } = useSession()
   const { profile } = useProfile(userId ?? undefined)
+  const currentSeason = useCurrentSeason()
   const [activeTab, setActiveTab] = useState<ArenaTab>('leaderboard')
   const [leaderboardSub, setLeaderboardSub] = useState<LeaderboardSub>('weekly')
   const [paywallVisible, setPaywallVisible] = useState(false)
@@ -79,6 +85,8 @@ export default function ArenaScreen() {
   } = useFollows(userId ?? undefined)
 
   const refreshing = lbLoading || weeklyLoading || clubLoading || challengesLoading
+  const currentScore = Number((profile as any)?.hybrid_score ?? 0)
+  const currentRank = Math.max(0, entries.findIndex((e:any) => (e.profile?.id ?? e.id) === userId)) + 1
 
   const handleRefresh = useCallback(() => {
     refetchLb(); refetchWeekly(); refetchClubs(); refetchChallenges(); refetchFriends(); refetchFollows()
@@ -88,18 +96,41 @@ export default function ArenaScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
+      {/* ── Arena hero ── */}
+      <SectionReveal delay={20}><LinearGradient colors={['#111B3E','#25377F','#7C3AED']} start={{x:0,y:0}} end={{x:1,y:1}} style={styles.header}>
         <View style={styles.headerRow}>
-          <View>
+          <View style={{flex:1}}>
+            <Text style={styles.arenaKicker}>SAISON HYBRID</Text>
             <Text style={styles.title}>{t.arena.title}</Text>
-            <Text style={styles.headerSub}>Classements & Défis</Text>
+            <Text style={styles.headerSub}>{currentSeason ? `${currentSeason.name} · jusqu'au ${new Date(currentSeason.ends_at).toLocaleDateString('fr-FR')}` : 'Classements · Défis · Rivalités'}</Text>
           </View>
-          <View style={styles.trophyBadge}>
-            <Trophy size={20} color="#F59E0B" strokeWidth={1.8} />
-          </View>
+          <GradeBadge score={currentScore} compact />
         </View>
-      </View>
+        <View style={styles.heroStats}>
+          <View style={styles.heroStat}><Text style={styles.heroStatLabel}>TON RANG</Text><Text style={styles.heroStatValue}>{currentRank ? `#${currentRank}` : '—'}</Text></View>
+          <View style={styles.heroDivider}/><View style={styles.heroStat}><Text style={styles.heroStatLabel}>SCORE</Text><Text style={styles.heroStatValue}>{currentScore}</Text></View>
+          <View style={styles.heroDivider}/><View style={styles.heroStat}><Text style={styles.heroStatLabel}>OBJECTIF</Text><Text style={styles.heroStatValue}>TOP 10</Text></View>
+        </View>
+      </LinearGradient></SectionReveal>
+
+      <SectionReveal delay={90}><View style={styles.v4Strip}>
+        <SensoryPressable style={styles.liveArenaCard} onPress={() => router.push('/modals/live' as any)} event="selection">
+          <View style={styles.liveArenaIcon}><Radio size={19} color="#FB7185" /></View>
+          <View style={{flex:1}}><Text style={styles.liveArenaTitle}>Hybrid Live</Text><Text style={styles.liveArenaSub}>Suivre les athlètes en activité · carte, notes, musique</Text></View>
+          <View style={styles.liveNow}><View style={styles.liveNowDot}/><Text style={styles.liveNowText}>LIVE</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/sport-rankings' as any)} event="selection">
+          <View style={styles.performanceIcon}><Trophy size={18} color="#F59E0B"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Records & niveaux officiels</Text><Text style={styles.performanceSub}>10 km · natation · vélo · force · niveaux fédéraux vérifiés</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <View style={styles.leagueCard}>
+          <View style={styles.leagueTop}><Shield size={17} color="#7C3AED"/><Text style={styles.leagueTitle}>Ligue de la semaine</Text><Text style={styles.leagueRank}>{currentRank ? `#${currentRank}` : '—'}</Text></View>
+          <Text style={styles.leagueSub}>Top 10 = promotion · saison et divisions prêtes pour la V4.</Text>
+          <View style={styles.leagueTrack}><LinearGradient colors={['#315CFF','#7C3AED']} style={[styles.leagueFill,{width:`${Math.max(14, Math.min(100, currentScore/10))}%`}]} /></View>
+        </View>
+      </View></SectionReveal>
 
       {/* ── Top tabs ── */}
       <TopTabBar active={activeTab} onChange={setActiveTab} />
@@ -181,11 +212,11 @@ function TopTabPill({ label, active, onPress }: { label: string; active: boolean
   }, [active, opacity])
 
   return (
-    <TouchableOpacity onPress={onPress} style={topTabStyles.pillWrap} activeOpacity={0.75}>
+    <SensoryPressable onPress={onPress} event="selection" style={topTabStyles.pillWrap}>
       <Animated.View style={[topTabStyles.pill, animStyle]}>
         <Text style={[topTabStyles.pillText, active && topTabStyles.pillTextActive]}>{label}</Text>
       </Animated.View>
-    </TouchableOpacity>
+    </SensoryPressable>
   )
 }
 
@@ -405,7 +436,7 @@ function SocialTab({
       .from('activities')
       .select('*, profile:profiles!user_id(id, username, avatar_url, is_pro)')
       .in('user_id', ids)
-      .order('created_at', { ascending: false })
+      .order('performed_at', { ascending: false })
       .limit(30)
     setFollowFeed(data ?? [])
     setFeedLoading(false)
@@ -572,7 +603,7 @@ function SocialFeedCard({ activity, index }: { activity: any; index: number }) {
         <Avatar uri={activity.profile?.avatar_url} username={activity.profile?.username ?? '?'} isPro={activity.profile?.is_pro} size={30} />
         <View style={{ flex: 1 }}>
           <Text style={socialStyles.feedUsername}>{activity.profile?.username}</Text>
-          <Text style={socialStyles.feedDate}>{socialTimeAgo(activity.created_at)}</Text>
+          <Text style={socialStyles.feedDate}>{socialTimeAgo(activity.performed_at ?? activity.created_at)}</Text>
         </View>
       </View>
     </Animated.View>
@@ -629,66 +660,38 @@ function EmptyState({ Icon, title, text, sub }: {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.bg },
-  header: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    marginBottom: Spacing.xs,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    fontSize: FontSize['2xl'],
-    fontWeight: FontWeight.extrabold,
-    color: Colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  headerSub: {
-    fontSize: FontSize.xs,
-    color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
-    marginTop: 1,
-  },
-  trophyBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(245,158,11,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.28)',
-  },
-  listContent: {
-    padding: Spacing.md,
-    paddingBottom: 40,
-  },
+  v4Strip:{paddingHorizontal:Spacing.md,paddingTop:10,gap:8},
+  liveArenaCard:{backgroundColor:'#fff',borderRadius:18,padding:12,flexDirection:'row',alignItems:'center',gap:10,...Shadow.sm},
+  liveArenaIcon:{width:40,height:40,borderRadius:13,backgroundColor:'#FFF1F2',alignItems:'center',justifyContent:'center'},
+  liveArenaTitle:{fontSize:12.5,fontWeight:FontWeight.extrabold,color:Colors.textPrimary},
+  liveArenaSub:{fontSize:9.5,color:Colors.textTertiary,marginTop:2},
+  liveNow:{flexDirection:'row',alignItems:'center',gap:4,backgroundColor:'#FFF1F2',borderRadius:99,paddingHorizontal:7,paddingVertical:5},
+  liveNowDot:{width:6,height:6,borderRadius:3,backgroundColor:'#FB7185'},
+  liveNowText:{fontSize:8,color:'#E11D48',fontWeight:FontWeight.extrabold,letterSpacing:.7},
+  performanceCard:{backgroundColor:'#fff',borderRadius:18,padding:12,flexDirection:'row',alignItems:'center',gap:10,...Shadow.sm},
+  performanceIcon:{width:40,height:40,borderRadius:13,backgroundColor:'#FFF7E7',alignItems:'center',justifyContent:'center'},
+  performanceTitle:{fontSize:11.5,fontWeight:FontWeight.extrabold,color:Colors.textPrimary},
+  performanceSub:{fontSize:9.5,color:Colors.textSecondary,marginTop:2,lineHeight:13},
+  leagueCard:{backgroundColor:'#F7F5FF',borderWidth:1,borderColor:'#E9E3FF',borderRadius:18,padding:12},
+  leagueTop:{flexDirection:'row',alignItems:'center',gap:7},leagueTitle:{fontSize:11.5,fontWeight:FontWeight.extrabold,color:'#4C1D95',flex:1},leagueRank:{fontSize:14,fontWeight:FontWeight.extrabold,color:'#7C3AED'},
+  leagueSub:{fontSize:9.5,color:'#6D5A86',marginTop:5},leagueTrack:{height:6,backgroundColor:'#E9E3FF',borderRadius:99,overflow:'hidden',marginTop:9},leagueFill:{height:'100%',borderRadius:99},
+  header: { marginHorizontal: Spacing.md, marginTop: Spacing.sm, marginBottom: 12, padding: Spacing.md, borderRadius: Radius.xl, ...Shadow.lg },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 },
+  arenaKicker: { fontSize: 9, color: 'rgba(255,255,255,.62)', fontWeight: FontWeight.extrabold, letterSpacing: 1.8 },
+  title: { fontSize: FontSize['2xl'], fontWeight: FontWeight.extrabold, color: '#fff', letterSpacing: -0.7, marginTop: 2 },
+  headerSub: { fontSize: FontSize.xs, color: 'rgba(255,255,255,.68)', fontWeight: FontWeight.medium, marginTop: 2 },
+  trophyBadge: { width: 42, height: 42, borderRadius: 15, backgroundColor: 'rgba(255,255,255,.12)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.18)' },
+  heroStats: { flexDirection:'row', alignItems:'center', backgroundColor:'rgba(255,255,255,.09)', borderRadius:14, paddingVertical:9, marginTop:14, borderWidth:1, borderColor:'rgba(255,255,255,.10)' },
+  heroStat:{ flex:1, alignItems:'center' }, heroStatLabel:{ fontSize:7,color:'rgba(255,255,255,.55)',fontWeight:FontWeight.extrabold,letterSpacing:1.2 }, heroStatValue:{ fontSize:15,color:'#fff',fontWeight:FontWeight.extrabold,marginTop:2 }, heroDivider:{ width:1,height:26,backgroundColor:'rgba(255,255,255,.13)' },
+  listContent: { padding: Spacing.md, paddingBottom: 40 },
 })
 
 const topTabStyles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
+  bar: { flexDirection: 'row', marginHorizontal: Spacing.md, gap: 4, marginBottom: Spacing.sm, backgroundColor:'#E8EEF7', padding:4, borderRadius:Radius.lg },
   pillWrap: { flex: 1 },
-  pill: {
-    paddingVertical: 9,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  pillText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    color: Colors.textTertiary,
-  },
-  pillTextActive: { color: Colors.electric },
+  pill: { paddingVertical: 9, borderRadius: Radius.md, alignItems: 'center' },
+  pillText: { fontSize: 11, fontWeight: FontWeight.semibold, color: Colors.textTertiary },
+  pillTextActive: { color: Colors.electric, fontWeight: FontWeight.extrabold },
 })
 
 const lbStyles = StyleSheet.create({

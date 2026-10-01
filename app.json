@@ -2,26 +2,28 @@
   "expo": {
     "name": "Hybrid.App",
     "slug": "hybrid-app",
-    "version": "1.0.0",
+    "version": "0.6.0",
     "scheme": "hybrid",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.hybridapp.app"
+      "bundleIdentifier": "com.hybridapp.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Hybrid.App utilise ta position pendant tes activités pour tracer ton parcours et permettre le suivi Live que tu actives."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.hybridapp.app"
+      "package": "com.hybridapp.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -35,11 +37,22 @@
       "expo-asset",
       "expo-font",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Hybrid.App utilise ta position uniquement pendant une activité Live ou GPS afin de tracer ton parcours."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Autoriser Hybrid à suivre votre parcours pendant une activité Live."
+        }
+      ]
     ],
     "updates": {
-      "url": "https://u.expo.dev/YOUR_PROJECT_ID",
-      "enabled": true,
+      "enabled": false,
       "fallbackToCacheTimeout": 0,
       "checkAutomatically": "ON_LOAD"
     },

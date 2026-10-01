@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, TextInput,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { User, BarChart3, Dumbbell, Zap, PersonStanding, Flame } from 'lucide-react-native'
+import { router } from 'expo-router'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { SPORTS_CONFIG } from '@/constants/sports'
 import { useActivities } from '@/hooks/useActivities'
-import { useSession } from '@/hooks/useProfile'
+import { useProfile, useSession } from '@/hooks/useProfile'
 import { useSkills } from '@/hooks/useSkills'
 import { useWeeklyGoal } from '@/hooks/useGoal'
 import { CoachTab } from '@/components/ui/CoachTab'
@@ -66,62 +67,76 @@ function TabPill({
 
 function ActivitiesTab() {
   const { userId } = useSession()
-  const { activities, loading } = useActivities(userId ?? undefined, 365)
+  const { activities, loading } = useActivities(userId ?? undefined, 3650)
+  const [sportFilter, setSportFilter] = useState<SportType | 'all'>('all')
+  const [period, setPeriod] = useState<30 | 90 | 365 | 3650>(90)
+  const [search, setSearch] = useState('')
 
-  if (loading) {
-    return (
-      <View style={act.center}>
-        <ActivityIndicator color={Colors.electric} />
-      </View>
-    )
-  }
+  const filtered = useMemo(() => {
+    const since = Date.now() - period * 86400000
+    return activities.filter(a => {
+      const date = new Date(a.performed_at ?? a.created_at).getTime()
+      const q = search.trim().toLowerCase()
+      const text = `${a.title ?? ''} ${a.notes ?? ''} ${SPORTS_CONFIG[a.sport_type]?.labelLong ?? a.sport_type}`.toLowerCase()
+      return date >= since && (sportFilter === 'all' || a.sport_type === sportFilter) && (!q || text.includes(q))
+    })
+  }, [activities, sportFilter, period, search])
 
-  if (!activities.length) {
-    return (
-      <View style={act.empty}>
-        <View style={act.emptyIcon}>
-          <PersonStanding size={30} color={Colors.textTertiary} strokeWidth={1.5} />
-        </View>
-        <Text style={act.emptyTitle}>Aucune activité</Text>
-        <Text style={act.emptySub}>Lance ta première séance pour la voir ici</Text>
-      </View>
-    )
-  }
+  if (loading) return <View style={act.center}><ActivityIndicator color={Colors.electric} /></View>
+
+  const filters: { key: SportType | 'all'; label: string }[] = [
+    { key: 'all', label: 'Tous' },
+    ...Array.from(new Set<SportType>(activities.map(a => a.sport_type))).map((key: SportType) => ({ key, label: SPORTS_CONFIG[key]?.label ?? key })),
+  ]
 
   return (
     <FlatList
-      data={activities as any[]}
+      data={filtered as any[]}
       keyExtractor={item => item.id}
       renderItem={({ item }) => <ActivityRow activity={item} />}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={act.list}
+      ListHeaderComponent={
+        <View style={act.filtersWrap}>
+          <TextInput value={search} onChangeText={setSearch} placeholder="Rechercher une séance, un sport, une note..." placeholderTextColor={Colors.textTertiary} style={act.searchInput} />
+          <View style={act.periodRow}>
+            {([30, 90, 365, 3650] as const).map(p => (
+              <TouchableOpacity key={p} style={[act.periodChip, period === p && act.filterActive]} onPress={() => setPeriod(p)}>
+                <Text style={[act.filterText, period === p && act.filterTextActive]}>{p === 30 ? '30 j' : p === 90 ? '90 j' : p === 365 ? '1 an' : 'Tout'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <FlatList
+            horizontal data={filters} keyExtractor={x => x.key} showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 7 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={[act.sportChip, sportFilter === item.key && act.filterActive]} onPress={() => setSportFilter(item.key)}>
+                <Text style={[act.filterText, sportFilter === item.key && act.filterTextActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            )}
+          />
+          {!filtered.length && <View style={act.emptyInline}><Text style={act.emptyTitle}>Aucune activité pour ces filtres</Text></View>}
+        </View>
+      }
     />
   )
 }
 
-function ActivityRow({ activity }: { activity: any }) {
+function ActivityRow({ activity }: { activity: Activity }) {
   const sportConfig = SPORTS_CONFIG[activity.sport_type as SportType] ?? SPORTS_CONFIG.running
   const { color, Icon: SportIcon } = sportConfig
-
   return (
-    <View style={act.row}>
-      <View style={[act.iconWrap, { backgroundColor: color + '20' }]}>
-        <SportIcon size={22} color={color} strokeWidth={1.8} />
-      </View>
+    <TouchableOpacity style={act.row} activeOpacity={0.8} onPress={() => router.push({ pathname: '/modals/activity/[id]' as any, params: { id: activity.id } })}>
+      <View style={[act.iconWrap, { backgroundColor: color + '20' }]}><SportIcon size={22} color={color} strokeWidth={1.8} /></View>
       <View style={act.info}>
-        <Text style={act.sport}>{sportConfig.labelLong}</Text>
-        <Text style={act.date}>{timeAgo(activity.created_at)}</Text>
+        <Text style={act.sport}>{activity.title || sportConfig.labelLong}{activity.is_verified ? '  ✓' : ''}</Text>
+        <Text style={act.date}>{timeAgo(activity.performed_at ?? activity.created_at)} · {activity.source === 'manual' ? 'manuel' : activity.source}</Text>
       </View>
       <View style={act.right}>
         <Text style={act.duration}>{formatDurationLong(activity.duration_seconds)}</Text>
-        {!!activity.calories_burned && (
-          <View style={act.calsRow}>
-            <Flame size={10} color="#FF6B35" strokeWidth={2} />
-            <Text style={act.cals}>{activity.calories_burned} kcal</Text>
-          </View>
-        )}
+        {!!activity.rpe && <Text style={act.rpe}>RPE {activity.rpe}/10</Text>}
       </View>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -132,6 +147,7 @@ export default function VousScreen() {
   const [subTab, setSubTab] = useState<SubTab>('profil')
   const { userId } = useSession()
   const { activities } = useActivities(userId ?? undefined, 365)
+  const { profile } = useProfile(userId ?? undefined)
   const skills = useSkills(activities as Activity[])
   const { goal } = useWeeklyGoal()
 
@@ -156,7 +172,7 @@ export default function VousScreen() {
         {subTab === 'stats'     && <StatsScreen embedded />}
         {subTab === 'activites' && <ActivitiesTab />}
         {subTab === 'coach'     && (
-          <CoachTab activities={activities as Activity[]} skills={skills} goal={goal} />
+          <CoachTab activities={activities as Activity[]} skills={skills} goal={goal} sports={profile?.favorite_sports ?? []} />
         )}
       </View>
     </View>
@@ -255,4 +271,14 @@ const act = StyleSheet.create({
   duration: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.textPrimary },
   calsRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   cals: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  filtersWrap: { gap: 10, marginBottom: Spacing.md },
+  searchInput: { height: 44, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgCard, paddingHorizontal: 12, color: Colors.textPrimary, fontSize: FontSize.sm },
+  periodRow: { flexDirection: 'row', gap: 7 },
+  periodChip: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: Radius.md, backgroundColor: Colors.bgAlt, borderWidth: 1, borderColor: Colors.borderLight },
+  sportChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.full, backgroundColor: Colors.bgAlt, borderWidth: 1, borderColor: Colors.borderLight },
+  filterActive: { backgroundColor: Colors.electricDim, borderColor: Colors.electric },
+  filterText: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  filterTextActive: { color: Colors.electric },
+  emptyInline: { paddingVertical: 36, alignItems: 'center' },
+  rpe: { fontSize: FontSize.xs, color: Colors.textTertiary },
 })
