@@ -1,15 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { Database } from '@/types/database'
-
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-})
+import { createClient } from '@supabase/supabase-js'
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://example.supabase.co'
+const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'public-anon-key'
+export const supabase = createClient(url, anon, { auth:{ storage:AsyncStorage, persistSession:true, autoRefreshToken:true, detectSessionInUrl:false } })

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Activity } from '@/types/database'
-import type { Skills } from '@/hooks/useSkills'
+import type { SkillScores } from '@/hooks/useSkills'
 import type { GoalConfig } from '@/hooks/useGoal'
 
 export interface ChatMessage {
@@ -10,7 +10,7 @@ export interface ChatMessage {
   content: string
 }
 
-function buildContext(activities: Activity[], skills: Skills, goal: GoalConfig | null) {
+function buildContext(activities: Activity[], skills: SkillScores, goal: GoalConfig | null) {
   const recentActs = activities.slice(0, 10)
   const actText = recentActs.length
     ? recentActs.map(a => {
@@ -31,7 +31,7 @@ function buildContext(activities: Activity[], skills: Skills, goal: GoalConfig |
   return { activities: actText, skills: skillsText, goal: goalText }
 }
 
-export function useCoach(activities: Activity[], skills: Skills, goal: GoalConfig | null) {
+export function useCoach(activities: Activity[], skills: SkillScores, goal: GoalConfig | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

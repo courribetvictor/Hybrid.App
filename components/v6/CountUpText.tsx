@@ -1,0 +1,4 @@
+import React,{useEffect,useRef,useState}from'react'
+import{Text,TextStyle,StyleProp}from'react-native'
+import{useSensoryPreferences}from'@/hooks/useSensoryPreferences'
+export function CountUpText({value,duration=520,style}:{value:number;duration?:number;style?:StyleProp<TextStyle>}){const[p,setP]=useState(value);const prev=useRef(value);const{prefs}=useSensoryPreferences();useEffect(()=>{if(prefs.reducedMotion){setP(value);prev.current=value;return}const from=prev.current,to=value,start=Date.now();let raf:any;const tick=()=>{const t=Math.min(1,(Date.now()-start)/duration);const eased=1-Math.pow(1-t,3);setP(Math.round(from+(to-from)*eased));if(t<1)raf=requestAnimationFrame(tick);else prev.current=to};tick();return()=>cancelAnimationFrame(raf)},[value,duration,prefs.reducedMotion]);return <Text style={style}>{p}</Text>}

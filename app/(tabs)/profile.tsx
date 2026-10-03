@@ -27,26 +27,27 @@ import { useWeeklyGoal } from '@/hooks/useGoal'
 import type { GoalConfig, GoalType } from '@/hooks/useGoal'
 import { SPORT_GOAL_OPTIONS, GLOBAL_GOAL_OPTIONS } from '@/constants/exercises'
 import { useFollows } from '@/hooks/useFollows'
+import { useSkills } from '@/hooks/useSkills'
+import { SkillsRadar } from '@/components/ui/SkillsRadar'
+import { GradeBadge } from '@/components/ui/GradeBadge'
+import { AchievementBadge } from '@/components/ui/AchievementBadge'
+import { getHybridRank, getNextRank } from '@/constants/ranks'
+import { LinearGradient } from 'expo-linear-gradient'
+import Constants from 'expo-constants'
+import { router } from 'expo-router'
 import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
 import type { PreferredUnit, PreferredLanguage, Profile, SportType, Activity } from '@/types/database'
+import { SPORT_BY_KEY, SPORT_CATALOG } from '@/constants/sportCatalog'
 
 // ── Constants ─────────────────────────────────────────────────
 
-const SPORT_EMOJI: Record<SportType, string> = {
-  running: '🏃', cycling: '🚴', swimming: '🏊', gym: '🏋️',
-  badminton: '🏸', athletics: '⚡', football: '⚽', tennis: '🎾',
-  hiking: '🥾', yoga: '🧘', boxing: '🥊',
-}
-const SPORT_LABEL: Record<SportType, string> = {
-  running: 'Course', cycling: 'Vélo', swimming: 'Natation', gym: 'Muscu',
-  badminton: 'Badminton', athletics: 'Athlétisme', football: 'Football',
-  tennis: 'Tennis', hiking: 'Randonnée', yoga: 'Yoga', boxing: 'Boxe',
-}
+const SPORT_EMOJI: Record<string,string> = new Proxy({} as Record<string,string>,{get:(_t,p:string)=>SPORT_BY_KEY[p]?.emoji??'🏅'})
+const SPORT_LABEL: Record<string,string> = new Proxy({} as Record<string,string>,{get:(_t,p:string)=>SPORT_BY_KEY[p]?.shortLabel??SPORT_BY_KEY[p]?.label??p})
 
 interface Achievement {
   id: string; emoji: string; label: string; desc: string
-  check: (p: { count: number; sports: number; streak: number; totalHours: number }) => boolean
+  check: (p: { count: number; sports: number; streak: number; totalHours: number; runningKm: number; gymCount: number; activeWeeks: number; hybridDays: number }) => boolean
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -65,7 +66,7 @@ const ACHIEVEMENTS: Achievement[] = [
 
 function computeStreak(activities: Activity[]): number {
   if (!activities.length) return 0
-  const days = new Set(activities.map(a => a.created_at.split('T')[0]))
+  const days = new Set(activities.map(a => (a.performed_at ?? a.created_at).split('T')[0]))
   const today = new Date()
   for (let offset = 0; offset <= 1; offset++) {
     const d = new Date(today)
@@ -105,38 +106,8 @@ const FITNESS_LEVELS = [
 
 const HYBRID_SCORE_MAX = 1000
 
-function computeHybridScore(activities: any[]): number {
-  const base = Math.min(activities.length * 20, 400)
-  const totalSecs = activities.reduce((s: number, a: any) => s + (a.duration_seconds ?? 0), 0)
-  const durationScore = Math.min(Math.floor(totalSecs / 600), 300)
-  const sportSet = new Set(activities.map((a: any) => a.sport_type)).size
-  const diversity = Math.min(sportSet * 50, 300)
-  return Math.min(base + durationScore + diversity, HYBRID_SCORE_MAX)
-}
 
 // ── Extra profile AsyncStorage hooks ──────────────────────────
-
-const EXTRA_KEY = 'hybrid_profile_extra'
-interface ProfileExtra { bio: string; fitnessLevel: string }
-const EXTRA_DEFAULT: ProfileExtra = { bio: '', fitnessLevel: '' }
-
-function useProfileExtra() {
-  const [extra, setExtraState] = useState<ProfileExtra>(EXTRA_DEFAULT)
-
-  useEffect(() => {
-    AsyncStorage.getItem(EXTRA_KEY).then(v => {
-      if (v) { try { setExtraState(JSON.parse(v)) } catch {} }
-    })
-  }, [])
-
-  const setExtra = useCallback(async (update: Partial<ProfileExtra>) => {
-    const next = { ...extra, ...update }
-    setExtraState(next)
-    await AsyncStorage.setItem(EXTRA_KEY, JSON.stringify(next))
-  }, [extra])
-
-  return { extra, setExtra }
-}
 
 const NOTIF_KEY = 'hybrid_notif_settings'
 const NOTIF_DEFAULTS: Record<string, boolean> = {
@@ -144,48 +115,75 @@ const NOTIF_DEFAULTS: Record<string, boolean> = {
 }
 
 function useNotifSettings() {
+  const { userId } = useSession()
   const [settings, setSettingsState] = useState<Record<string, boolean>>(NOTIF_DEFAULTS)
 
   useEffect(() => {
-    AsyncStorage.getItem(NOTIF_KEY).then(v => {
-      if (v) { try { setSettingsState(JSON.parse(v)) } catch {} }
-    })
-  }, [])
+    if (!userId) return
+    supabase.from('user_preferences').select('notifications').eq('user_id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.notifications) setSettingsState({ ...NOTIF_DEFAULTS, ...(data.notifications as any) })
+      })
+  }, [userId])
 
   const toggle = useCallback(async (id: string) => {
+    if (!userId) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     const next = { ...settings, [id]: !settings[id] }
     setSettingsState(next)
-    await AsyncStorage.setItem(NOTIF_KEY, JSON.stringify(next))
-  }, [settings])
+    const { error } = await supabase.from('user_preferences').upsert({ user_id: userId, notifications: next } as any)
+    if (error) {
+      setSettingsState(settings)
+      Alert.alert('Erreur', error.message)
+    }
+  }, [settings, userId])
 
   return { settings, toggle }
 }
-
 const PRIVACY_KEY = 'hybrid_privacy_settings'
 const PRIVACY_DEFAULTS: Record<string, boolean> = {
   public_profile: true, show_activities: true, show_leaderboard: true, show_body_metrics: false,
 }
 
 function usePrivacySettings() {
+  const { userId } = useSession()
   const [settings, setSettingsState] = useState<Record<string, boolean>>(PRIVACY_DEFAULTS)
 
   useEffect(() => {
-    AsyncStorage.getItem(PRIVACY_KEY).then(v => {
-      if (v) { try { setSettingsState(JSON.parse(v)) } catch {} }
-    })
-  }, [])
+    if (!userId) return
+    supabase.from('profiles').select('show_profile,show_activities,show_ranking,show_body_metrics').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setSettingsState({
+          public_profile: data.show_profile ?? true,
+          show_activities: data.show_activities ?? true,
+          show_leaderboard: data.show_ranking ?? true,
+          show_body_metrics: data.show_body_metrics ?? false,
+        })
+      })
+  }, [userId])
 
   const toggle = useCallback(async (id: string) => {
+    if (!userId) return
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    const next = { ...settings, [id]: !settings[id] }
-    setSettingsState(next)
-    await AsyncStorage.setItem(PRIVACY_KEY, JSON.stringify(next))
-  }, [settings])
+    const nextValue = !settings[id]
+    const column = ({
+      public_profile: 'show_profile',
+      show_activities: 'show_activities',
+      show_leaderboard: 'show_ranking',
+      show_body_metrics: 'show_body_metrics',
+    } as Record<string, string>)[id]
+    if (!column) return
+    setSettingsState(prev => ({ ...prev, [id]: nextValue }))
+    const { error } = await supabase.from('profiles').update({ [column]: nextValue } as any).eq('id', userId)
+    if (error) {
+      setSettingsState(prev => ({ ...prev, [id]: !nextValue }))
+      Alert.alert('Erreur', error.message)
+    }
+  }, [settings, userId])
 
   return { settings, toggle }
 }
-
 // ── Screen ────────────────────────────────────────────────────
 
 export default function ProfileScreen({ embedded = false }: { embedded?: boolean }) {
@@ -194,7 +192,10 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
   const { activities } = useActivities(userId ?? undefined, 365)
   const { logs: bodyLogs } = useBodyLogs(userId ?? undefined, 90)
   const { goal, setGoal, clearGoal } = useWeeklyGoal()
-  const { extra, setExtra } = useProfileExtra()
+  const extra = { bio: profile?.bio ?? '', fitnessLevel: profile?.fitness_level ?? '' }
+  const setExtra = useCallback(async (update: { bio?: string; fitnessLevel?: string }) => {
+    await updateProfile({ bio: update.bio ?? profile?.bio ?? '', fitness_level: update.fitnessLevel ?? profile?.fitness_level ?? '' })
+  }, [profile?.bio, profile?.fitness_level, updateProfile])
   const { followingCount, followersCount } = useFollows(userId ?? undefined)
 
   const [paywallVisible, setPaywallVisible] = useState(false)
@@ -290,8 +291,12 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
     })
   }, [profile?.id]) // only on first profile load (id change)
 
-  const hybridScore = computeHybridScore(activities)
+  const skills = useSkills(activities as Activity[])
+  const hybridScore = skills.overall * 10
   const scoreProgress = hybridScore / HYBRID_SCORE_MAX
+  const hybridRank = getHybridRank(hybridScore)
+  const nextHybridRank = getNextRank(hybridScore)
+  const rankProgress = hybridRank.key === 'legend' ? 1 : Math.max(0, Math.min(1, (hybridScore - hybridRank.min) / Math.max(1, nextHybridRank.min - hybridRank.min)))
 
   const latestWeight = bodyLogs.find((l: any) => l.weight_kg !== null)?.weight_kg ?? profile?.current_weight_kg
   const heightCm = profile?.height_cm
@@ -332,20 +337,30 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
   const weightDisplay = latestWeight ? displayWeight(latestWeight, unit) : null
 
   const allSports = useMemo(
-    () => [...new Set(activities.map((a: Activity) => a.sport_type))] as SportType[],
-    [activities],
+    () => [...new Set([...(profile?.favorite_sports ?? []), ...activities.map((a: Activity) => a.sport_type)])] as SportType[],
+    [activities, profile?.favorite_sports],
   )
   const streak = useMemo(() => computeStreak(activities as Activity[]), [activities])
   const totalHours = Math.floor(activities.reduce((s: number, a: any) => s + a.duration_seconds, 0) / 3600)
 
-  const achievementParams = { count: activities.length, sports: allSports.length, streak, totalHours }
+  const achievementParams = useMemo(() => {
+    const runningKm = (activities as Activity[]).filter(a => a.sport_type === 'running').reduce((sum, a) => sum + Number((a.metrics as any)?.distance_m ?? 0) / 1000, 0)
+    const gymCount = (activities as Activity[]).filter(a => a.sport_type === 'gym').length
+    const weeks = new Set((activities as Activity[]).map(a => {
+      const d = new Date(a.performed_at ?? a.created_at); const first = new Date(d.getFullYear(), 0, 1); const day = Math.floor((d.getTime() - first.getTime()) / 86400000); return `${d.getFullYear()}-${Math.floor((day + first.getDay()) / 7)}`
+    }))
+    const daySports = new Map<string, Set<SportType>>()
+    ;(activities as Activity[]).forEach(a => { const day=(a.performed_at ?? a.created_at).slice(0,10); if(!daySports.has(day)) daySports.set(day,new Set()); daySports.get(day)!.add(a.sport_type) })
+    const hybridDays = [...daySports.values()].filter(set => set.size >= 2).length
+    return { count: activities.length, sports: allSports.length, streak, totalHours, runningKm, gymCount, activeWeeks: weeks.size, hybridDays }
+  }, [activities, allSports.length, streak, totalHours])
   const unlockedCount = ACHIEVEMENTS.filter(a => a.check(achievementParams)).length
 
   const thisWeekData = useMemo(() => {
     const monday = new Date()
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
     monday.setHours(0, 0, 0, 0)
-    const allWeek = (activities as Activity[]).filter(a => new Date(a.created_at) >= monday)
+    const allWeek = (activities as Activity[]).filter(a => new Date(a.performed_at ?? a.created_at) >= monday)
     const weekActs = goal?.sport && goal.sport !== 'all'
       ? allWeek.filter(a => a.sport_type === goal.sport)
       : allWeek
@@ -434,20 +449,24 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
           </Text>
         </View>
 
-        {/* Hybrid Score */}
-        <View style={scoreStyles.card}>
+        {/* Hybrid identity + rank */}
+        <LinearGradient colors={['#172554','#263D88','#315CFF']} start={{x:0,y:0}} end={{x:1,y:1}} style={scoreStyles.card}>
           <View style={scoreStyles.header}>
-            <Text style={scoreStyles.label}>Hybrid Score</Text>
-            <Text style={scoreStyles.value}>
-              {hybridScore}
-              <Text style={scoreStyles.max}> / {HYBRID_SCORE_MAX}</Text>
-            </Text>
+            <View style={scoreStyles.rankArea}>
+              <GradeBadge score={hybridScore} />
+              <View style={{flex:1}}>
+                <Text style={scoreStyles.kicker}>HYBRID RANK</Text>
+                <Text style={scoreStyles.rankName}>{hybridRank.name}</Text>
+                <Text style={scoreStyles.rankHint}>{hybridRank.key === 'legend' ? 'Niveau maximal atteint' : `${nextHybridRank.min - hybridScore} pts avant ${nextHybridRank.name}`}</Text>
+              </View>
+            </View>
+            <View style={scoreStyles.scoreBubble}><Text style={scoreStyles.value}>{hybridScore}</Text><Text style={scoreStyles.max}>/{HYBRID_SCORE_MAX}</Text></View>
           </View>
-          <View style={scoreStyles.barBg}>
-            <View style={[scoreStyles.barFill, { width: `${scoreProgress * 100}%` as any }]} />
-          </View>
-          <Text style={scoreStyles.hint}>Basé sur tes séances, durée et diversité sportive sur 12 mois</Text>
-        </View>
+          <View style={scoreStyles.rankBarBg}><LinearGradient colors={[hybridRank.color2,hybridRank.color]} style={[scoreStyles.rankBarFill,{width:`${rankProgress*100}%` as any}]}/></View>
+          <View style={scoreStyles.scoreFooter}><Text style={scoreStyles.scoreFooterText}>HYBRID SCORE</Text><Text style={scoreStyles.scoreFooterText}>{hybridRank.key === 'legend' ? 'MAX' : nextHybridRank.name.toUpperCase()}</Text></View>
+        </LinearGradient>
+
+        <SkillsRadar skills={skills} />
 
         {/* Stats rapides */}
         <View style={quickStats.row}>
@@ -551,15 +570,7 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
             {ACHIEVEMENTS.map(a => {
               const unlocked = a.check(achievementParams)
               return (
-                <View key={a.id} style={[achieveStyles.badge, !unlocked && achieveStyles.badgeLocked]}>
-                  <Text style={[achieveStyles.badgeEmoji, !unlocked && achieveStyles.badgeEmojiLocked]}>
-                    {unlocked ? a.emoji : '🔒'}
-                  </Text>
-                  <Text style={[achieveStyles.badgeLabel, !unlocked && achieveStyles.badgeLabelLocked]}>
-                    {a.label}
-                  </Text>
-                  <Text style={achieveStyles.badgeDesc}>{a.desc}</Text>
-                </View>
+                <AchievementBadge key={a.id} id={a.id} label={a.label} desc={a.desc} unlocked={unlocked} />
               )
             })}
           </View>
@@ -652,6 +663,30 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
             }}
           />
           <ActionRow
+            icon="🎯"
+            label="Mes sports"
+            sub="Ajouter, retirer ou découvrir des disciplines"
+            onPress={() => router.push('/modals/sports' as any)}
+          />
+          <ActionRow
+            icon="🧬"
+            label="Ma classe Hybrid"
+            sub="Spécialisation, bonus XP et identité sportive"
+            onPress={() => router.push('/modals/choose-class' as any)}
+          />
+          <ActionRow
+            icon="🏅"
+            label="Niveau sportif vérifié"
+            sub="Fédération, division, niveau officiel"
+            onPress={() => router.push('/modals/credentials' as any)}
+          />
+          <ActionRow
+            icon="✨"
+            label="Sensations de l’app"
+            sub="Sons, vibrations et animations"
+            onPress={() => router.push('/modals/sensory-settings' as any)}
+          />
+          <ActionRow
             icon="🔔"
             label="Notifications"
             sub="Défis, amis, rappels..."
@@ -670,6 +705,20 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
             }}
           />
 
+          <ActionRow
+            icon="🔗"
+            label="Sources de données"
+            sub="Garmin, Apple Health, Health Connect, Strava"
+            onPress={() => router.push('/modals/connections' as any)}
+          />
+
+          <ActionRow
+            icon="⚙️"
+            label="Compte & données"
+            sub="Email, mot de passe, export, suppression"
+            onPress={() => router.push('/modals/account' as any)}
+          />
+
           <View style={styles.signOutWrap}>
             <Button
               label="Se déconnecter"
@@ -680,7 +729,7 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
           </View>
         </View>
 
-        <Text style={styles.version}>Hybrid.App · v0.1.0</Text>
+        <Text style={styles.version}>Hybrid.App · v{Constants.expoConfig?.version ?? '1.0.0'}</Text>
       </ScrollView>
 
       {/* Modals */}
@@ -770,20 +819,8 @@ function BodyMetric({ label, value, sub, subColor }: { label: string; value: str
 
 // ── Goal Modal ────────────────────────────────────────────────
 
-const GOAL_SPORT_LIST: { key: SportType | 'all'; label: string; emoji: string }[] = [
-  { key: 'all',      label: 'Tous',       emoji: '🌐' },
-  { key: 'running',  label: 'Course',     emoji: '🏃' },
-  { key: 'cycling',  label: 'Vélo',       emoji: '🚴' },
-  { key: 'swimming', label: 'Natation',   emoji: '🏊' },
-  { key: 'gym',      label: 'Muscu',      emoji: '🏋️' },
-  { key: 'hiking',   label: 'Rando',      emoji: '🥾' },
-  { key: 'football', label: 'Football',   emoji: '⚽' },
-  { key: 'tennis',   label: 'Tennis',     emoji: '🎾' },
-  { key: 'badminton',label: 'Badminton',  emoji: '🏸' },
-  { key: 'boxing',   label: 'Boxe',       emoji: '🥊' },
-  { key: 'athletics',label: 'Athlé.',     emoji: '⚡' },
-  { key: 'yoga',     label: 'Yoga',       emoji: '🧘' },
-]
+const GOAL_SPORT_LIST: { key: SportType | 'all'; label: string; emoji: string }[] = [{ key:'all', label:'Tous les sports', emoji:'⚡' }, ...SPORT_CATALOG.map(sp=>({key:sp.key,label:sp.shortLabel??sp.label,emoji:sp.emoji}))]
+
 
 function GoalModal({
   visible, current, onSave, onClear, onClose,
@@ -881,7 +918,7 @@ function GoalModal({
 
               {/* Value grid */}
               <View style={goalModalStyles.grid}>
-                {(typeInfo?.values ?? []).map(n => (
+                {(typeInfo?.values ?? []).map((n: number) => (
                   <TouchableOpacity
                     key={n}
                     style={[
@@ -1140,7 +1177,7 @@ function NotificationsModal({ visible, onClose }: { visible: boolean; onClose: (
           ))}
 
           <Text style={sheetStyles.note}>
-            Les notifications push arrivent dans la prochaine mise à jour.
+            Ces préférences sont maintenant synchronisées avec ton compte. L’envoi push nécessite encore la configuration Expo Notifications côté serveur.
           </Text>
           <Button label="Fermer" variant="ghost" onPress={onClose} style={{ marginTop: Spacing.xs }} />
         </View>
@@ -1182,7 +1219,7 @@ function PrivacyModal({ visible, onClose }: { visible: boolean; onClose: () => v
           ))}
 
           <Text style={sheetStyles.note}>
-            La gestion fine des permissions sera synchronisée dans une prochaine mise à jour.
+            Ces réglages sont enregistrés sur ton compte et appliqués côté base de données avec les règles RLS fournies.
           </Text>
           <Button label="Fermer" variant="ghost" onPress={onClose} style={{ marginTop: Spacing.xs }} />
         </View>
@@ -1329,19 +1366,23 @@ const toggleRowStyles = StyleSheet.create({
 
 const scoreStyles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Spacing.md,
-    gap: Spacing.sm,
-    ...Shadow.sm,
+    gap: 12,
+    ...Shadow.lg,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  label: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  value: { fontSize: FontSize['2xl'], fontWeight: FontWeight.extrabold, color: Colors.electric },
-  max: { fontSize: FontSize.sm, fontWeight: FontWeight.regular, color: Colors.textTertiary },
-  barBg: { height: 10, backgroundColor: Colors.bgAlt, borderRadius: 5, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: Colors.electric, borderRadius: 5 },
-  hint: { fontSize: FontSize.xs, color: Colors.textTertiary, lineHeight: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  rankArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  kicker: { fontSize: 8, color: 'rgba(255,255,255,.62)', fontWeight: FontWeight.extrabold, letterSpacing: 1.5 },
+  rankName: { fontSize: 24, color: '#fff', fontWeight: FontWeight.extrabold, letterSpacing: -.4, marginTop: 1 },
+  rankHint: { fontSize: 10, color: 'rgba(255,255,255,.68)', marginTop: 2 },
+  scoreBubble: { alignItems: 'flex-end' },
+  value: { fontSize: FontSize['2xl'], fontWeight: FontWeight.extrabold, color: '#fff' },
+  max: { fontSize: FontSize.xs, fontWeight: FontWeight.bold, color: 'rgba(255,255,255,.56)' },
+  rankBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,.16)', borderRadius: 99, overflow: 'hidden' },
+  rankBarFill: { height: '100%', borderRadius: 99 },
+  scoreFooter: { flexDirection: 'row', justifyContent: 'space-between' },
+  scoreFooterText: { fontSize: 8, color: 'rgba(255,255,255,.6)', fontWeight: FontWeight.extrabold, letterSpacing: 1.2 },
 })
 
 const quickStats = StyleSheet.create({
@@ -1506,23 +1547,18 @@ const goalStyles = StyleSheet.create({
 const achieveStyles = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Spacing.md,
     gap: Spacing.md,
-    ...Shadow.sm,
+    ...Shadow.md,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
   },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  count: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.electric },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  badge: {
-    width: 72,
-    alignItems: 'center',
-    gap: 3,
-    padding: Spacing.xs,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.bgAlt,
-  },
+  title: { fontSize: FontSize.lg, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
+  count: { fontSize: FontSize.sm, fontWeight: FontWeight.extrabold, color: Colors.electric, backgroundColor: Colors.electricDim, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: Spacing.sm },
+  badge: { width: 72, alignItems: 'center' },
   badgeLocked: { opacity: 0.45 },
   badgeEmoji: { fontSize: 24 },
   badgeEmojiLocked: {},

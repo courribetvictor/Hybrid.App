@@ -1,317 +1,36 @@
-// ============================================================
-// Hybrid.App — Supabase Database Types (auto-documented)
-// ============================================================
-
-export type PreferredUnit = 'metric' | 'imperial'
 export type PreferredLanguage = 'fr' | 'en'
-export type SportType =
-  | 'running' | 'cycling' | 'swimming' | 'gym' | 'badminton' | 'athletics'
-  | 'football' | 'tennis' | 'hiking' | 'yoga' | 'boxing'
-export type FriendshipStatus = 'pending' | 'accepted'
-
-export interface Follow {
-  follower_id: string
-  following_id: string
-  created_at: string
-}
-
-export interface Post {
-  id: string
-  user_id: string
-  content: string
-  sport_type: SportType | null
-  media_url: string | null
-  likes_count: number
-  created_at: string
-}
-
-export interface PostLike {
-  user_id: string
-  post_id: string
-  created_at: string
-}
-
-export interface PostWithProfile extends Post {
-  profiles: {
-    username: string
-    avatar_url: string | null
-    is_pro: boolean
-  } | null
-  liked_by_me: boolean
-}
-
-// ── Sport-specific JSONB metric shapes ──────────────────────
-
-export interface EnduranceMetrics {
-  distance_m: number
-  avg_pace_s_per_km?: number
-  avg_heart_rate?: number
-  elevation_m?: number
-  splits?: { km: number; pace_s: number }[]
-}
-
-export interface GymSet {
-  reps: number
-  weight_kg: number
-  rpe?: number // Rate of Perceived Exertion 1-10
-}
-
-export interface GymExercise {
-  name: string
-  sets: GymSet[]
-  one_rm_kg?: number
-}
-
-export interface GymMetrics {
-  exercises: GymExercise[]
-  total_volume_kg?: number // auto-computed: sum(reps * weight)
-}
-
-export interface BadmintonSet {
-  player_score: number
-  opponent_score: number
-}
-
-export interface BadmintonMetrics {
-  sets: BadmintonSet[]
-  match_won: boolean
-  opponent_name?: string
-}
-
-export interface AthleticsMetrics {
-  event: string          // e.g. "100m", "long_jump", "javelin"
-  result_value: number
-  result_unit: 'm' | 's' | 'points'
-  wind_speed?: number    // m/s, for sprints/jumps
-}
-
-export interface FootballMetrics {
-  match_won?: boolean
-  goals_scored?: number
-  assists?: number
-  position?: 'goalkeeper' | 'defender' | 'midfielder' | 'forward'
-  distance_m?: number
-}
-
-export interface TennisSet {
-  player_games: number
-  opponent_games: number
-}
-
-export interface TennisMetrics {
-  sets: TennisSet[]
-  match_won: boolean
-  aces?: number
-  double_faults?: number
-}
-
-export type YogaStyle = 'hatha' | 'vinyasa' | 'yin' | 'ashtanga' | 'power' | 'other'
-
-export interface YogaMetrics {
-  style?: YogaStyle
-  avg_heart_rate?: number
-}
-
-export type BoxingBoutType = 'sparring' | 'bag' | 'pad_work' | 'competition'
-
-export interface BoxingMetrics {
-  rounds?: number
-  bout_type?: BoxingBoutType
-  avg_heart_rate?: number
-}
-
-export type ActivityMetrics =
-  | EnduranceMetrics
-  | GymMetrics
-  | BadmintonMetrics
-  | AthleticsMetrics
-  | FootballMetrics
-  | TennisMetrics
-  | YogaMetrics
-  | BoxingMetrics
-
-// ── Database row types ───────────────────────────────────────
-
+export type PreferredUnit = 'metric' | 'imperial'
+export type SportType = string
+export type ActivitySource = 'manual'|'gps'|'garmin'|'apple_health'|'health_connect'|'strava'
+export interface GymSet { reps:number; weight_kg:number; rir?:number|null; rest_seconds?:number|null; warmup?:boolean }
+export interface GymExercise { name:string; sets:GymSet[] }
+export interface BadmintonSet { player_score:number; opponent_score:number }
+export interface TennisSet { player_games:number; opponent_games:number }
+export type ActivityMetrics = Record<string, any>
 export interface Profile {
-  id: string
-  username: string
-  height_cm: number | null
-  current_weight_kg: number | null
-  is_pro: boolean
-  hybrid_score: number
-  preferred_unit: PreferredUnit
-  preferred_language: PreferredLanguage
-  avatar_url: string | null
-  favorite_sports: SportType[]
-  created_at: string
+  id:string; username:string; avatar_url?:string|null; bio?:string|null; height_cm?:number|null; weight_kg?:number|null; current_weight_kg?:number|null;
+  preferred_language?:PreferredLanguage; preferred_unit?:PreferredUnit; favorite_sports?:SportType[]; is_pro?:boolean;
+  hybrid_score?:number|null; fitness_level?:string|null; created_at:string;
+  show_profile?:boolean; show_activities?:boolean; show_ranking?:boolean; show_body_metrics?:boolean;
 }
-
-export interface BodyLog {
-  id: string
-  user_id: string
-  weight_kg: number | null
-  body_fat_percentage: number | null
-  calories_consumed: number | null
-  logged_date: string // ISO date "YYYY-MM-DD"
-  created_at: string
-}
-
 export interface Activity {
-  id: string
-  user_id: string
-  sport_type: SportType
-  duration_seconds: number
-  calories_burned: number | null
-  metrics: ActivityMetrics
-  created_at: string
+  id:string; user_id:string; sport_type:SportType; duration_seconds:number; calories_burned?:number|null; metrics:ActivityMetrics;
+  title?:string|null; notes?:string|null; rpe?:number|null; mood?:number|null; performed_at:string; created_at:string; updated_at?:string|null;
+  source?:ActivitySource; source_external_id?:string|null; is_verified?:boolean; visibility?:'public'|'followers'|'private';
 }
+export interface ActivityWithProfile extends Activity { profile?:Profile|null }
+export interface PostWithProfile { id:string; user_id:string; content:string; created_at:string; profile?:Profile|null; likes?:string[]; image_url?:string|null; likes_count:number; liked_by_me:boolean; sport_type?:SportType|null; media_url?:string|null }
 
-export interface Friendship {
-  id: string
-  user_id: string
-  friend_id: string
-  status: FriendshipStatus
-  created_at: string
+export type LiveVisibility = 'public' | 'followers' | 'private'
+export interface LiveNote { id:string; at_seconds:number; distance_km?:number|null; text:string; created_at:string }
+export interface LiveReaction { id:string; emoji:string; user_id:string; created_at:string }
+export interface LiveActivity {
+  id:string; user_id:string; sport_type:SportType; started_at:string; ended_at?:string|null; status:'live'|'paused'|'finished';
+  visibility:LiveVisibility; share_location:boolean; hide_start_end:boolean; delayed_minutes?:number|null;
+  distance_km?:number|null; duration_seconds:number; pace_seconds_per_km?:number|null; heart_rate?:number|null; elevation_m?:number|null;
+  current_track?:{ title:string; artist:string; artwork_url?:string|null }|null; notes?:LiveNote[]; reactions_count?:number; profile?:Profile|null;
 }
+export interface TrainingPlanItem { id:string; user_id:string; date:string; sport_type:SportType; title:string; duration_minutes?:number|null; status:'planned'|'done'|'skipped'; source:'manual'|'coach'; details?:Record<string,any> }
+export interface EquipmentItem { id:string; user_id:string; category:string; name:string; brand?:string|null; sport_type?:SportType|null; distance_km?:number; usage_minutes?:number; threshold_km?:number|null; active:boolean; created_at:string }
 
-export interface Club {
-  id: string
-  name: string
-  owner_id: string
-  total_points: number
-  created_at: string
-}
-
-export interface ClubMember {
-  club_id: string
-  user_id: string
-  joined_at: string
-}
-
-export interface WeeklyChallenge {
-  id: string
-  title: string
-  description: string | null
-  sport_type: SportType
-  target_value: number | null
-  target_unit: string | null
-  is_pro_only: boolean
-  start_date: string
-  end_date: string
-  created_at: string
-}
-
-// ── Supabase database schema type (for createClient<Database>()) ──
-
-// Utility: make a type compatible with Supabase's Record<string, unknown> constraint
-type DbRow<T> = T & { [K: string]: unknown }
-
-export type Database = {
-  public: {
-    Tables: {
-      profiles: {
-        Row: DbRow<Profile>
-        Insert: DbRow<Omit<Profile, 'id' | 'hybrid_score' | 'created_at' | 'favorite_sports'> & {
-          id?: string
-          hybrid_score?: number
-          favorite_sports?: SportType[]
-          created_at?: string
-        }>
-        Update: DbRow<Partial<Omit<Profile, 'id' | 'created_at'>>>
-        Relationships: []
-      }
-      body_logs: {
-        Row: DbRow<BodyLog>
-        Insert: DbRow<Omit<BodyLog, 'id' | 'created_at'> & { id?: string; created_at?: string }>
-        Update: DbRow<Partial<Omit<BodyLog, 'id' | 'user_id' | 'created_at'>>>
-        Relationships: []
-      }
-      activities: {
-        Row: DbRow<Activity>
-        Insert: DbRow<Omit<Activity, 'id' | 'created_at'> & { id?: string; created_at?: string }>
-        Update: DbRow<Partial<Omit<Activity, 'id' | 'user_id' | 'created_at'>>>
-        Relationships: []
-      }
-      follows: {
-        Row: DbRow<Follow>
-        Insert: DbRow<Omit<Follow, 'created_at'> & { created_at?: string }>
-        Update: DbRow<Record<string, never>>
-        Relationships: []
-      }
-      friendships: {
-        Row: DbRow<Friendship>
-        Insert: DbRow<Omit<Friendship, 'id' | 'created_at'> & { id?: string; created_at?: string }>
-        Update: DbRow<Pick<Friendship, 'status'>>
-        Relationships: []
-      }
-      clubs: {
-        Row: DbRow<Club>
-        Insert: DbRow<Omit<Club, 'id' | 'total_points' | 'created_at'> & {
-          id?: string
-          total_points?: number
-          created_at?: string
-        }>
-        Update: DbRow<Partial<Pick<Club, 'name' | 'total_points'>>>
-        Relationships: []
-      }
-      club_members: {
-        Row: DbRow<ClubMember>
-        Insert: DbRow<Omit<ClubMember, 'joined_at'> & { joined_at?: string }>
-        Update: DbRow<Record<string, never>>
-        Relationships: []
-      }
-      weekly_challenges: {
-        Row: DbRow<WeeklyChallenge>
-        Insert: DbRow<Omit<WeeklyChallenge, 'id' | 'created_at'> & { id?: string; created_at?: string }>
-        Update: DbRow<Partial<Omit<WeeklyChallenge, 'id' | 'created_at'>>>
-        Relationships: []
-      }
-      posts: {
-        Row: DbRow<Post>
-        Insert: DbRow<Omit<Post, 'id' | 'likes_count' | 'created_at' | 'media_url'> & {
-          id?: string
-          likes_count?: number
-          media_url?: string | null
-          created_at?: string
-        }>
-        Update: DbRow<Partial<Pick<Post, 'content' | 'sport_type' | 'media_url'>>>
-        Relationships: []
-      }
-      post_likes: {
-        Row: DbRow<PostLike>
-        Insert: DbRow<Omit<PostLike, 'created_at'> & { created_at?: string }>
-        Update: DbRow<Record<string, never>>
-        Relationships: []
-      }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      toggle_post_like: {
-        Args: { p_post_id: string; p_user_id: string }
-        Returns: boolean
-      }
-    }
-    Enums: {
-      preferred_unit: PreferredUnit
-      preferred_language: PreferredLanguage
-      sport_type: SportType
-      friendship_status: FriendshipStatus
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
-
-// ── Utility / joined types ───────────────────────────────────
-
-export interface ActivityWithProfile extends Activity {
-  profile: Pick<Profile, 'id' | 'username' | 'avatar_url' | 'is_pro'>
-}
-
-export interface ClubWithMembers extends Club {
-  members: (ClubMember & { profile: Pick<Profile, 'id' | 'username' | 'avatar_url'> })[]
-  member_count: number
-}
+export interface BodyLog { id:string; user_id:string; weight_kg:number|null; body_fat_percentage:number|null; calories_consumed:number|null; logged_date:string; created_at:string }

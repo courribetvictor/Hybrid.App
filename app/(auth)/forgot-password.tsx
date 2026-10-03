@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { router } from 'expo-router'
+import * as Linking from 'expo-linking'
 import * as Haptics from 'expo-haptics'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
@@ -24,7 +25,7 @@ export default function ForgotPasswordScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setLoading(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase())
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: Linking.createURL('/(auth)/reset-password') })
     setLoading(false)
     if (error) Alert.alert('Erreur', error.message)
     else setSent(true)

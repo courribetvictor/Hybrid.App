@@ -1,280 +1,40 @@
-import React, { useState, useRef, useCallback } from 'react'
-import {
-  View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
-} from 'react-native'
-import * as Haptics from 'expo-haptics'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
-import { useCoach } from '@/hooks/useCoach'
-import type { Activity } from '@/types/database'
-import type { Skills } from '@/hooks/useSkills'
-import type { GoalConfig } from '@/hooks/useGoal'
+import React,{useMemo,useState}from'react'
+import{ScrollView,View,Text,StyleSheet,TouchableOpacity,TextInput}from'react-native'
+import{LinearGradient}from'expo-linear-gradient'
+import{router}from'expo-router'
+import{Sparkles,Send,CalendarDays,RefreshCw,TrendingUp,ShieldCheck}from'lucide-react-native'
+import{Colors,FontSize,FontWeight,Radius,Spacing,Gradients,Shadow}from'@/constants/theme'
+import{SPORT_BY_KEY}from'@/constants/sportCatalog'
+import{buildCoachPlans}from'@/lib/coachEngine'
+import{computeReadiness}from'@/lib/readiness'
+import{QUICK_COACH_PROMPTS}from'@/constants/v4'
+import{useProgression}from'@/hooks/useProgression'
+import{CLASS_BY_KEY}from'@/constants/v5'
+import type{Activity,SportType}from'@/types/database'
+import type{SkillScores}from'@/hooks/useSkills'
+import type{GoalConfig}from'@/hooks/useGoal'
 
-const SUGGESTED: string[] = [
-  'Analyse ma semaine et donne-moi un bilan',
-  'Comment progresser en endurance ?',
-  'Quel sport devrais-je pratiquer plus ?',
-  'Crée-moi un plan d\'entraînement pour cette semaine',
-  'Quels sont mes points faibles à travailler ?',
-]
+type ChatMsg={role:'user'|'coach';text:string}
+export function CoachTab({activities,skills,goal,sports}:{activities:Activity[];skills:SkillScores;goal:GoalConfig|null;sports:SportType[]}){
+ const[active,setActive]=useState<SportType|undefined>(sports[0]); const[input,setInput]=useState(''); const[messages,setMessages]=useState<ChatMsg[]>([]); const progression=useProgression(); const athleteClass=progression.athleteClass?CLASS_BY_KEY[progression.athleteClass]:undefined
+ const readiness=useMemo(()=>computeReadiness(activities),[activities])
+ const plans=useMemo(()=>buildCoachPlans(sports,activities),[sports,activities]); const shown=plans.find(p=>p.sport===active)??plans[0]; const nextPlan=()=>{if(!shown||!plans.length)return;const i=plans.findIndex(p=>p.sport===shown.sport);setActive(plans[(i+1)%plans.length]?.sport)}
+ const week=useMemo(()=>activities.filter(a=>Date.now()-new Date(a.performed_at||a.created_at).getTime()<7*86400000),[activities]); const weekMin=Math.round(week.reduce((s,a)=>s+a.duration_seconds,0)/60)
+ const weak=useMemo(()=>[['Endurance',skills.endurance],['Force',skills.strength],['Vitesse',skills.speed],['Régularité',skills.consistency],['Polyvalence',skills.versatility]].sort((a:any,b:any)=>a[1]-b[1])[0],[skills])
+ const respond=(q:string)=>{const txt=q.trim();if(!txt)return;let answer=''; const lower=txt.toLowerCase(); if(lower.includes('semaine'))answer=`Je te propose une semaine équilibrée : 2 séances de qualité, 1 séance facile, 1 séance spécifique ${SPORT_BY_KEY[shown?.sport??'running']?.label??'sport'} et au moins 1 journée de récupération. Ta readiness est actuellement de ${readiness.score}/100.`;else if(lower.includes('récup'))answer=`Ta readiness est de ${readiness.score}/100. Tu as ${week.length} séances et ${weekMin} minutes sur 7 jours. ${readiness.message}`;else if(lower.includes('aujourd')||lower.includes('faire'))answer=shown?`Aujourd’hui, je choisirais « ${shown.title} » (${shown.duration}). Objectif : ${shown.objective}. ${shown.why}`:'Ajoute d’abord un sport à ton profil pour que je puisse te proposer une séance cohérente.';else answer=shown?`Pour ${SPORT_BY_KEY[shown.sport]?.label??shown.sport}, je garderais comme priorité : ${shown.objective}. Commence par ${shown.blocks[0]?.toLowerCase()??'un échauffement progressif'} puis ajuste selon ton ressenti.`:'Dis-moi ton sport principal, ton temps disponible et ton niveau de fatigue.';setMessages(m=>[...m,{role:'user',text:txt},{role:'coach',text:answer}]);setInput('')}
+ return <ScrollView contentContainerStyle={s.wrap} showsVerticalScrollIndicator={false}>
+   <LinearGradient colors={Gradients.arena} style={s.heroCard}><View style={s.heroTop}><View style={s.aiLogo}><Sparkles size={23} color="#fff"/></View><View style={{flex:1}}><Text style={s.heroEyebrow}>COACH HYBRID</Text><Text style={s.heroTitle}>Ton coach multisport personnel</Text></View><View style={[s.ready,{borderColor:readiness.color}]}><Text style={[s.readyN,{color:readiness.color}]}>{readiness.score}</Text><Text style={s.readyL}>READY</Text></View></View><Text style={s.heroSub}>Il utilise tes sports, ton historique, ta charge récente, tes objectifs{athleteClass?` et ta classe ${athleteClass.name}`:''} pour proposer des séances cohérentes.</Text>{athleteClass?<View style={[s.classHint,{borderColor:athleteClass.color+'55',backgroundColor:athleteClass.color+'18'}]}><Text style={[s.classHintText,{color:athleteClass.color}]}>Classe {athleteClass.name} · {athleteClass.boostLabel} · les performances officielles restent inchangées</Text></View>:null}</LinearGradient>
 
-interface CoachTabProps {
-  activities: Activity[]
-  skills: Skills
-  goal: GoalConfig | null
+   <View style={s.snapshot}><Snapshot icon={<TrendingUp size={17} color="#315CFF"/>} value={`${week.length}`} label="séances / 7 j"/><Snapshot icon={<CalendarDays size={17} color="#7C3AED"/>} value={`${weekMin}`} label="minutes / 7 j"/><Snapshot icon={<ShieldCheck size={17} color="#F59E0B"/>} value={`${weak[1]}`} label={`${weak[0]} / 100`}/></View>
+
+   <Text style={s.section}>Sport ciblé</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sports}>{sports.map(k=>{const sp=SPORT_BY_KEY[k];if(!sp)return null;const on=shown?.sport===k;return <TouchableOpacity key={k} onPress={()=>setActive(k)} style={[s.sport,on&&{borderColor:sp.color,backgroundColor:sp.color+'12'}]}><Text style={s.sportEmoji}>{sp.emoji}</Text><Text style={[s.sportText,on&&{color:sp.color,fontWeight:FontWeight.extrabold}]}>{sp.shortLabel??sp.label}</Text></TouchableOpacity>})}</ScrollView>
+
+   {shown?<View style={s.plan}><View style={s.planTop}><View style={[s.planSport,{backgroundColor:(SPORT_BY_KEY[shown.sport]?.color??Colors.electric)+'18'}]}><Text style={s.planEmoji}>{SPORT_BY_KEY[shown.sport]?.emoji}</Text></View><View style={{flex:1}}><Text style={s.planTitle}>{shown.title}</Text><Text style={s.planMeta}>{shown.duration} · Intensité {shown.intensity.toLowerCase()}</Text></View><TouchableOpacity style={s.refresh} onPress={nextPlan}><RefreshCw size={16} color={Colors.electric}/></TouchableOpacity></View><Text style={s.objective}>{shown.objective}</Text><View style={s.whyBox}><Text style={s.whyLabel}>POURQUOI CETTE SÉANCE</Text><Text style={s.why}>{shown.why}</Text></View>{shown.blocks.map((b,i)=><View key={i} style={s.block}><View style={s.num}><Text style={s.numText}>{i+1}</Text></View><Text style={s.blockText}>{b}</Text></View>)}<TouchableOpacity style={s.addPlan} onPress={()=>router.push('/modals/calendar' as any)}><CalendarDays size={17} color="#fff"/><Text style={s.addPlanText}>Ajouter au calendrier</Text></TouchableOpacity></View>:<View style={s.empty}><Text style={s.emptyTitle}>Ajoute au moins un sport à ton profil</Text><Text style={s.emptySub}>Le Coach pourra ensuite construire des séances spécifiques.</Text></View>}
+
+   <Text style={s.section}>Demande au Coach</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.quick}>{QUICK_COACH_PROMPTS.map(q=><TouchableOpacity key={q} style={s.quickChip} onPress={()=>respond(q)}><Text style={s.quickText}>{q}</Text></TouchableOpacity>)}</ScrollView>
+   <View style={s.chat}>{messages.map((m,i)=><View key={i} style={[s.bubble,m.role==='user'?s.userBubble:s.coachBubble]}><Text style={[s.bubbleText,m.role==='user'&&{color:'#fff'}]}>{m.text}</Text></View>)}{!messages.length&&<View style={s.chatEmpty}><Sparkles size={18} color="#7C3AED"/><Text style={s.chatEmptyText}>Ex. « J’ai badminton demain et 40 minutes aujourd’hui, que faire ? »</Text></View>}<View style={s.composer}><TextInput value={input} onChangeText={setInput} placeholder="Écris au Coach..." placeholderTextColor={Colors.textTertiary} style={s.input} multiline/><TouchableOpacity style={s.send} onPress={()=>respond(input)}><Send size={17} color="#fff"/></TouchableOpacity></View></View>
+   <Text style={s.disclaimer}>Le Coach Hybrid fournit des recommandations sportives générales basées sur les données enregistrées. Ajuste toujours selon ton niveau réel, ta récupération et les consignes de ton entraîneur ou professionnel de santé.</Text>
+ </ScrollView>
 }
-
-export function CoachTab({ activities, skills, goal }: CoachTabProps) {
-  const { messages, loading, error, sendMessage, clearChat } = useCoach(activities, skills, goal)
-  const [input, setInput] = useState('')
-  const listRef = useRef<FlatList>(null)
-
-  const handleSend = useCallback(async () => {
-    const text = input.trim()
-    if (!text || loading) return
-    setInput('')
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await sendMessage(text)
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
-  }, [input, loading, sendMessage])
-
-  const handleSuggestion = useCallback(async (text: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await sendMessage(text)
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
-  }, [sendMessage])
-
-  const isEmpty = messages.length === 0
-
-  return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.coachBadge}>
-          <Text style={styles.coachEmoji}>⚡</Text>
-          <View>
-            <Text style={styles.coachName}>Coach Hybrid</Text>
-            <Text style={styles.coachSub}>IA personnalisée sur tes données</Text>
-          </View>
-        </View>
-        {!isEmpty && (
-          <TouchableOpacity onPress={clearChat} style={styles.clearBtn} activeOpacity={0.7}>
-            <Text style={styles.clearTxt}>Effacer</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Messages or welcome */}
-      {isEmpty ? (
-        <View style={styles.welcome}>
-          <Text style={styles.welcomeTitle}>Bonjour, athlète 👋</Text>
-          <Text style={styles.welcomeSub}>
-            Je connais tes activités et tes stats. Pose-moi n'importe quelle question.
-          </Text>
-          <View style={styles.suggestions}>
-            {SUGGESTED.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.suggestionBtn}
-                onPress={() => handleSuggestion(s)}
-                activeOpacity={0.75}
-              >
-                <Text style={styles.suggestionTxt}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={m => m.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <View style={[
-              styles.bubble,
-              item.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
-            ]}>
-              {item.role === 'assistant' && (
-                <Text style={styles.bubbleFrom}>⚡ Coach</Text>
-              )}
-              <Text style={[
-                styles.bubbleText,
-                item.role === 'user' && styles.bubbleTextUser,
-              ]}>
-                {item.content}
-              </Text>
-            </View>
-          )}
-          ListFooterComponent={
-            loading ? (
-              <View style={styles.typingWrap}>
-                <ActivityIndicator size="small" color={Colors.electric} />
-                <Text style={styles.typingText}>Coach en train d'écrire…</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.errorWrap}>
-                <Text style={styles.errorText}>⚠️ {error}</Text>
-              </View>
-            ) : null
-          }
-        />
-      )}
-
-      {/* Input bar */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Pose une question…"
-          placeholderTextColor={Colors.textTertiary}
-          multiline
-          maxLength={500}
-          returnKeyType="send"
-          onSubmitEditing={handleSend}
-          blurOnSubmit={false}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!input.trim() || loading}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.sendIcon}>↑</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  )
-}
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bg },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.borderLight,
-  },
-  coachBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  coachEmoji: {
-    fontSize: 28,
-    width: 40,
-    height: 40,
-    textAlign: 'center',
-    lineHeight: 40,
-    backgroundColor: Colors.electricDim,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  coachName: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.textPrimary },
-  coachSub: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  clearBtn: { padding: 6 },
-  clearTxt: { fontSize: FontSize.sm, color: Colors.textTertiary },
-  welcome: {
-    flex: 1,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-  },
-  welcomeTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
-  welcomeSub: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
-  suggestions: { gap: Spacing.sm, marginTop: Spacing.sm },
-  suggestionBtn: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    ...Shadow.sm,
-  },
-  suggestionTxt: { fontSize: FontSize.sm, color: Colors.textPrimary, fontWeight: FontWeight.medium },
-  list: {
-    padding: Spacing.md,
-    gap: Spacing.md,
-    paddingBottom: 8,
-  },
-  bubble: {
-    maxWidth: '85%',
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: 6,
-  },
-  bubbleUser: {
-    alignSelf: 'flex-end',
-    backgroundColor: Colors.electric,
-    borderBottomRightRadius: 4,
-  },
-  bubbleAssistant: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.bgCard,
-    borderBottomLeftRadius: 4,
-    ...Shadow.sm,
-  },
-  bubbleFrom: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
-    color: Colors.electric,
-  },
-  bubbleText: {
-    fontSize: FontSize.md,
-    color: Colors.textPrimary,
-    lineHeight: 22,
-  },
-  bubbleTextUser: { color: '#fff' },
-  typingWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: Spacing.md,
-    alignSelf: 'flex-start',
-  },
-  typingText: { fontSize: FontSize.sm, color: Colors.textTertiary },
-  errorWrap: { padding: Spacing.md },
-  errorText: { fontSize: FontSize.sm, color: Colors.error },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.borderLight,
-    backgroundColor: Colors.bg,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: Colors.bgAlt,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: FontSize.md,
-    color: Colors.textPrimary,
-    maxHeight: 100,
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.electric,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadow.sm,
-  },
-  sendBtnDisabled: { backgroundColor: Colors.border },
-  sendIcon: { fontSize: 20, color: '#fff', fontWeight: FontWeight.bold },
-})
+function Snapshot({icon,value,label}:{icon:React.ReactNode;value:string;label:string}){return <View style={s.snap}>{icon}<Text style={s.snapValue}>{value}</Text><Text style={s.snapLabel}>{label}</Text></View>}
+const s=StyleSheet.create({wrap:{padding:Spacing.md,gap:Spacing.md,paddingBottom:60},heroCard:{borderRadius:26,padding:18,...Shadow.lg},heroTop:{flexDirection:'row',alignItems:'center',gap:11},aiLogo:{width:44,height:44,borderRadius:15,backgroundColor:'rgba(255,255,255,.12)',alignItems:'center',justifyContent:'center'},heroEyebrow:{fontSize:9,color:'#C4B5FD',fontWeight:FontWeight.extrabold,letterSpacing:1.3},heroTitle:{fontSize:18,fontWeight:FontWeight.extrabold,color:'#fff',marginTop:2},heroSub:{fontSize:11,color:'#D8E1FF',lineHeight:16,marginTop:13},classHint:{alignSelf:'flex-start',borderWidth:1,borderRadius:99,paddingHorizontal:9,paddingVertical:6,marginTop:10},classHintText:{fontSize:8.5,fontWeight:FontWeight.extrabold},ready:{width:52,height:52,borderRadius:17,borderWidth:1.5,alignItems:'center',justifyContent:'center',backgroundColor:'rgba(255,255,255,.08)'},readyN:{fontSize:19,fontWeight:FontWeight.extrabold},readyL:{fontSize:7,color:'#CBD5E1',fontWeight:FontWeight.extrabold,letterSpacing:.7},snapshot:{flexDirection:'row',backgroundColor:'#fff',borderRadius:19,padding:11,...Shadow.sm},snap:{flex:1,alignItems:'center',gap:3},snapValue:{fontSize:16,fontWeight:FontWeight.extrabold,color:Colors.textPrimary},snapLabel:{fontSize:8.5,color:Colors.textTertiary,textAlign:'center'},section:{fontSize:FontSize.md,fontWeight:FontWeight.extrabold,color:Colors.textPrimary,marginTop:2},sports:{gap:7,paddingRight:12},sport:{flexDirection:'row',alignItems:'center',gap:6,borderWidth:1,borderColor:Colors.border,backgroundColor:Colors.bgCard,paddingHorizontal:10,paddingVertical:8,borderRadius:Radius.full},sportEmoji:{fontSize:15},sportText:{fontSize:FontSize.sm,color:Colors.textPrimary},plan:{backgroundColor:Colors.bgCard,borderRadius:22,padding:Spacing.md,gap:12,...Shadow.sm},planTop:{flexDirection:'row',gap:10,alignItems:'center'},planSport:{width:48,height:48,borderRadius:15,alignItems:'center',justifyContent:'center'},planEmoji:{fontSize:24},planTitle:{fontSize:FontSize.lg,fontWeight:FontWeight.extrabold,color:Colors.textPrimary},planMeta:{fontSize:FontSize.sm,color:Colors.textSecondary,marginTop:2},refresh:{width:34,height:34,borderRadius:11,backgroundColor:Colors.electricDim,alignItems:'center',justifyContent:'center'},objective:{fontSize:13,color:Colors.textPrimary,fontWeight:FontWeight.bold},whyBox:{backgroundColor:'#F7F8FE',padding:11,borderRadius:14},whyLabel:{fontSize:8.5,color:'#7C3AED',fontWeight:FontWeight.extrabold,letterSpacing:.8},why:{fontSize:11,color:Colors.textSecondary,lineHeight:16,marginTop:4},block:{flexDirection:'row',gap:10,alignItems:'flex-start'},num:{width:25,height:25,borderRadius:9,backgroundColor:Colors.electricDim,alignItems:'center',justifyContent:'center'},numText:{color:Colors.electric,fontWeight:FontWeight.extrabold,fontSize:11},blockText:{flex:1,color:Colors.textPrimary,lineHeight:19,fontSize:12},addPlan:{backgroundColor:Colors.textPrimary,borderRadius:14,paddingVertical:12,flexDirection:'row',gap:7,alignItems:'center',justifyContent:'center',marginTop:2},addPlanText:{color:'#fff',fontWeight:FontWeight.extrabold,fontSize:12},empty:{backgroundColor:Colors.bgCard,padding:Spacing.lg,borderRadius:Radius.lg},emptyTitle:{fontWeight:FontWeight.bold,color:Colors.textPrimary},emptySub:{fontSize:11,color:Colors.textSecondary,marginTop:4},quick:{gap:7,paddingRight:10},quickChip:{backgroundColor:'#fff',borderWidth:1,borderColor:Colors.border,paddingHorizontal:11,paddingVertical:8,borderRadius:99},quickText:{fontSize:10.5,color:Colors.textPrimary,fontWeight:FontWeight.semibold},chat:{backgroundColor:'#fff',borderRadius:20,padding:12,gap:9,...Shadow.sm},bubble:{maxWidth:'88%',borderRadius:15,paddingHorizontal:11,paddingVertical:9},userBubble:{alignSelf:'flex-end',backgroundColor:Colors.electric,borderBottomRightRadius:5},coachBubble:{alignSelf:'flex-start',backgroundColor:'#F1F5F9',borderBottomLeftRadius:5},bubbleText:{fontSize:11.5,lineHeight:17,color:Colors.textPrimary},chatEmpty:{flexDirection:'row',gap:8,alignItems:'center',padding:7},chatEmptyText:{flex:1,fontSize:10.5,color:Colors.textTertiary,lineHeight:15},composer:{flexDirection:'row',alignItems:'flex-end',borderWidth:1,borderColor:Colors.border,borderRadius:15,padding:7,marginTop:2},input:{flex:1,minHeight:36,maxHeight:90,paddingHorizontal:5,paddingVertical:7,color:Colors.textPrimary,fontSize:11.5},send:{width:35,height:35,borderRadius:11,backgroundColor:Colors.electric,alignItems:'center',justifyContent:'center'},disclaimer:{fontSize:9.5,color:Colors.textTertiary,lineHeight:14,paddingHorizontal:3}})
