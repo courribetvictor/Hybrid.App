@@ -1,169 +1,33 @@
 import React from 'react'
+import Animated,{FadeInDown}from'react-native-reanimated'
 import { View, Text, StyleSheet } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Crown, Medal } from 'lucide-react-native'
 import { Avatar } from '@/components/ui/Avatar'
-import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
-import type { LeaderboardEntry } from '@/hooks/useLeaderboard'
+import { GradeBadge } from '@/components/ui/GradeBadge'
+import { Colors, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
+import {useSensoryPreferences}from'@/hooks/useSensoryPreferences'
 
-interface LeaderboardRowProps {
-  entry: LeaderboardEntry
-  rank: number
-  isCurrentUser?: boolean
-  weeklySeconds?: number
-  weeklySessions?: number
-}
+const podium = [
+  { bg:['#FFF5C2','#F6C453'], color:'#A76C00' },
+  { bg:['#F3F6FA','#CBD5E1'], color:'#64748B' },
+  { bg:['#F8E2D5','#D98955'], color:'#9A4E24' },
+] as const
 
-const PODIUM: Record<number, { bg: string; text: string; border: string; rowBg: string; rowBorder: string }> = {
-  1: { bg: '#F59E0B', text: '#fff',    border: '#D97706', rowBg: 'rgba(245,158,11,0.07)', rowBorder: 'rgba(245,158,11,0.28)' },
-  2: { bg: '#94A3B8', text: '#fff',    border: '#64748B', rowBg: 'rgba(148,163,184,0.07)', rowBorder: 'rgba(148,163,184,0.28)' },
-  3: { bg: '#CD7F32', text: '#fff',    border: '#A0522D', rowBg: 'rgba(205,127,50,0.07)',  rowBorder: 'rgba(205,127,50,0.28)' },
-}
-
-function formatWeekly(secs: number, sessions: number) {
-  const h = Math.floor(secs / 3600)
-  const m = Math.floor((secs % 3600) / 60)
-  const dur = h > 0 ? `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}` : `${m}min`
-  return `${sessions} séance${sessions > 1 ? 's' : ''} · ${dur}`
-}
-
-export function LeaderboardRow({
-  entry, rank, isCurrentUser = false, weeklySeconds, weeklySessions,
-}: LeaderboardRowProps) {
-  const isPodium = rank <= 3
-  const podium = isPodium ? PODIUM[rank] : null
-  const showWeekly = weeklySeconds !== undefined
-
-  const scoreColor = isPodium
-    ? PODIUM[rank].bg
-    : isCurrentUser
-    ? Colors.electric
-    : Colors.textSecondary
-
-  const scoreText = showWeekly
-    ? `${Math.floor((weeklySeconds ?? 0) / 60)}min`
-    : Math.round(entry.hybrid_score).toLocaleString()
-
-  return (
-    <View style={[
-      styles.row,
-      isPodium  && { backgroundColor: podium!.rowBg, borderColor: podium!.rowBorder, borderWidth: 1 },
-      isCurrentUser && !isPodium && styles.rowMe,
-    ]}>
-      {/* Rank badge */}
-      {isPodium ? (
-        <View style={[styles.rankBadge, { backgroundColor: podium!.bg, borderColor: podium!.border }]}>
-          <Text style={[styles.rankBadgeText, { color: podium!.text }]}>{rank}</Text>
-        </View>
-      ) : (
-        <View style={styles.rankNum}>
-          <Text style={[styles.rankNumText, isCurrentUser && { color: Colors.electric }]}>{rank}</Text>
-        </View>
-      )}
-
-      <Avatar uri={entry.avatar_url} username={entry.username} isPro={entry.is_pro} size={isPodium ? 40 : 36} />
-
-      <View style={styles.nameCol}>
-        <View style={styles.nameRow}>
-          <Text style={[
-            styles.username,
-            isPodium     && styles.usernamePodium,
-            isCurrentUser && styles.usernameMe,
-          ]} numberOfLines={1}>
-            {entry.username}
-          </Text>
-          {isCurrentUser && (
-            <View style={styles.meBadge}>
-              <Text style={styles.meText}>vous</Text>
-            </View>
-          )}
-        </View>
-        {showWeekly && weeklySeconds !== undefined && weeklySessions !== undefined && (
-          <Text style={styles.detail}>{formatWeekly(weeklySeconds, weeklySessions)}</Text>
-        )}
-      </View>
-
-      <Text style={[styles.score, { color: scoreColor }]}>{scoreText}</Text>
+export function LeaderboardRow({entry,rank,isCurrentUser,weeklySeconds,weeklySessions}:{entry:any;rank:number;isCurrentUser?:boolean;weeklySeconds?:number;weeklySessions?:number}){
+  const{prefs}=useSensoryPreferences()
+  const p=entry.profile||entry
+  const score=Number(entry.score??entry.hybrid_score??p.hybrid_score??0)
+  const top=rank<=3?podium[rank-1]:null
+  return <Animated.View entering={prefs.reducedMotion?undefined:FadeInDown.delay(Math.min(rank,12)*28).duration(320)} style={[s.wrap,isCurrentUser&&s.meWrap]}>
+    {isCurrentUser && <View style={s.youTag}><Text style={s.youText}>TOI</Text></View>}
+    <View style={s.row}>
+      {top ? <LinearGradient colors={[...top.bg]} style={s.rankTop}>{rank===1?<Crown size={17} color={top.color}/>:<Medal size={17} color={top.color}/>}<Text style={[s.rankTopText,{color:top.color}]}>{rank}</Text></LinearGradient> : <View style={s.rank}><Text style={s.rankText}>{rank}</Text></View>}
+      <Avatar uri={p.avatar_url} username={p.username||p.name||'?'} size={42}/>
+      <View style={s.info}><Text numberOfLines={1} style={s.name}>{p.username||p.name||'Athlète'}</Text><Text style={s.meta}>{weeklySessions!=null?`${weeklySessions} séances cette semaine`:'Athlète Hybrid'}</Text></View>
+      <GradeBadge score={score} compact/>
+      <View style={s.scoreWrap}><Text style={s.score}>{score}</Text><Text style={s.scoreLabel}>PTS</Text></View>
     </View>
-  )
+  </Animated.View>
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 11,
-    borderRadius: Radius.md,
-    marginHorizontal: Spacing.md,
-    marginVertical: 2,
-    borderWidth: 0,
-    borderColor: 'transparent',
-  },
-  rowMe: {
-    backgroundColor: Colors.electricDim,
-    borderWidth: 1,
-    borderColor: Colors.electric + '40',
-  },
-
-  // Podium badge (filled circle with rank number)
-  rankBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    flexShrink: 0,
-    ...Shadow.sm,
-  },
-  rankBadgeText: {
-    fontSize: 13,
-    fontWeight: FontWeight.extrabold,
-  },
-
-  // Plain rank number
-  rankNum: {
-    width: 30,
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  rankNumText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: Colors.textTertiary,
-  },
-
-  // Name column
-  nameCol: { flex: 1, gap: 2 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  username: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.medium,
-    color: Colors.textPrimary,
-    flexShrink: 1,
-  },
-  usernamePodium: { fontWeight: FontWeight.bold },
-  usernameMe:     { fontWeight: FontWeight.bold, color: Colors.electric },
-
-  // "vous" badge
-  meBadge: {
-    backgroundColor: Colors.electricDim,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radius.full,
-  },
-  meText: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: Colors.electric,
-  },
-
-  detail: { fontSize: FontSize.xs, color: Colors.textTertiary },
-
-  score: {
-    fontSize: FontSize.md,
-    fontWeight: FontWeight.extrabold,
-    minWidth: 52,
-    textAlign: 'right',
-  },
-})
+const s=StyleSheet.create({wrap:{backgroundColor:Colors.bgCard,borderRadius:Radius.lg,marginBottom:9,borderWidth:1,borderColor:Colors.borderLight,...Shadow.sm,position:'relative'},meWrap:{borderColor:Colors.electric,backgroundColor:'#F8FAFF'},youTag:{position:'absolute',right:10,top:-6,zIndex:2,backgroundColor:Colors.electric,borderRadius:99,paddingHorizontal:7,paddingVertical:2},youText:{fontSize:8,color:'#fff',fontWeight:FontWeight.extrabold,letterSpacing:1},row:{minHeight:66,flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:11},rank:{width:32,height:32,borderRadius:10,backgroundColor:Colors.bgAlt,alignItems:'center',justifyContent:'center'},rankText:{color:Colors.textTertiary,fontWeight:FontWeight.extrabold,fontSize:12},rankTop:{width:34,height:34,borderRadius:11,alignItems:'center',justifyContent:'center'},rankTopText:{position:'absolute',bottom:2,right:4,fontSize:8,fontWeight:FontWeight.extrabold},info:{flex:1},name:{color:Colors.textPrimary,fontWeight:FontWeight.bold,fontSize:14},meta:{fontSize:10,color:Colors.textTertiary,marginTop:2},scoreWrap:{alignItems:'flex-end',minWidth:40},score:{color:Colors.textPrimary,fontWeight:FontWeight.extrabold,fontSize:16},scoreLabel:{fontSize:7,color:Colors.textTertiary,fontWeight:FontWeight.bold,letterSpacing:1}})

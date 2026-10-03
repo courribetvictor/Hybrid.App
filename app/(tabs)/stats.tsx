@@ -223,7 +223,7 @@ function OverviewTab({ activities, heatmapData, sportBreakdown, totalCalories, t
 function WeeklyVolumeChart({ activities }: any) {
   const byWeek: Record<string, number> = {}
   for (const a of activities) {
-    const d = new Date(a.created_at)
+    const d = new Date(a.performed_at ?? a.created_at)
     const monday = new Date(d)
     monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`
@@ -261,7 +261,7 @@ function WeeklyVolumeChart({ activities }: any) {
 function WeeklyDurationChart({ activities }: any) {
   const byWeek: Record<string, number> = {}
   for (const a of activities) {
-    const d = new Date(a.created_at)
+    const d = new Date(a.performed_at ?? a.created_at)
     const monday = new Date(d)
     monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`
@@ -342,14 +342,14 @@ function PersonalRecords({ activities }: any) {
 }
 
 function CumulativeDistanceChart({ activities }: any) {
-  const sorted = [...activities].sort((a: any, b: any) => a.created_at.localeCompare(b.created_at))
+  const sorted = [...activities].sort((a: any, b: any) => (a.performed_at ?? a.created_at).localeCompare(b.performed_at ?? b.created_at))
   let cum = 0
   const points: { label: string; value: number }[] = []
   for (const a of sorted) {
     const dist = (a.metrics?.distance_m ?? 0) / 1000
     if (dist > 0) {
       cum += dist
-      points.push({ label: a.created_at.slice(5, 10), value: parseFloat(cum.toFixed(1)) })
+      points.push({ label: (a.performed_at ?? a.created_at).slice(5, 10), value: parseFloat(cum.toFixed(1)) })
     }
   }
   const sampled = points.length > 8 ? points.filter((_, i) => i % Math.ceil(points.length / 8) === 0 || i === points.length - 1) : points
@@ -377,7 +377,7 @@ function CumulativeDistanceChart({ activities }: any) {
 function WeeklyCaloriesChart({ activities }: any) {
   const byWeek: Record<string, number> = {}
   for (const a of activities) {
-    const d = new Date(a.created_at)
+    const d = new Date(a.performed_at ?? a.created_at)
     const monday = new Date(d)
     monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`
@@ -422,7 +422,7 @@ function BodyTab({ bodyLogs, activities, unit }: any) {
 
   const totalBurnedByDay: Record<string, number> = {}
   for (const a of activities) {
-    const day = a.created_at.split('T')[0]
+    const day = (a.performed_at ?? a.created_at).split('T')[0]
     totalBurnedByDay[day] = (totalBurnedByDay[day] ?? 0) + (a.calories_burned ?? 0)
   }
   const calDays = bodyLogs.filter((l: any) => l.calories_consumed).slice(-8)
@@ -624,7 +624,7 @@ function DayFrequencyCard({ activities }: any) {
   const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
   const counts = [0, 0, 0, 0, 0, 0, 0]
   for (const a of activities) {
-    const d = new Date(a.created_at)
+    const d = new Date(a.performed_at ?? a.created_at)
     const dow = (d.getDay() + 6) % 7 // 0=Mon
     counts[dow]++
   }
@@ -650,7 +650,7 @@ function DayFrequencyCard({ activities }: any) {
 function TrainingCaloriesCard({ activities }: any) {
   const byWeek: Record<string, number> = {}
   for (const a of activities) {
-    const d = new Date(a.created_at)
+    const d = new Date(a.performed_at ?? a.created_at)
     const monday = new Date(d)
     monday.setDate(d.getDate() - ((d.getDay() + 6) % 7))
     const key = `${monday.getDate()}/${monday.getMonth() + 1}`

@@ -15,6 +15,10 @@ CREATE INDEX IF NOT EXISTS idx_follows_following ON follows (following_id);
 
 ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "follows_public_read" ON follows;
+DROP POLICY IF EXISTS "follows_own_insert"  ON follows;
+DROP POLICY IF EXISTS "follows_own_delete"  ON follows;
+
 CREATE POLICY "follows_public_read" ON follows FOR SELECT USING (true);
 CREATE POLICY "follows_own_insert"  ON follows FOR INSERT WITH CHECK (auth.uid() = follower_id);
 CREATE POLICY "follows_own_delete"  ON follows FOR DELETE USING (auth.uid() = follower_id);

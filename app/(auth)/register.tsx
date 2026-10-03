@@ -18,20 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '@/lib/supabase'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import type { SportType } from '@/types/database'
-
-const SPORTS: { type: SportType; emoji: string; label: string }[] = [
-  { type: 'running',   emoji: '🏃', label: 'Course' },
-  { type: 'cycling',   emoji: '🚴', label: 'Vélo' },
-  { type: 'swimming',  emoji: '🏊', label: 'Natation' },
-  { type: 'gym',       emoji: '🏋️', label: 'Muscu' },
-  { type: 'badminton', emoji: '🏸', label: 'Badminton' },
-  { type: 'athletics', emoji: '⚡', label: 'Athlé' },
-  { type: 'football',  emoji: '⚽', label: 'Football' },
-  { type: 'tennis',    emoji: '🎾', label: 'Tennis' },
-  { type: 'hiking',    emoji: '🥾', label: 'Rando' },
-  { type: 'yoga',      emoji: '🧘', label: 'Yoga' },
-  { type: 'boxing',    emoji: '🥊', label: 'Boxe' },
-]
+import { SportPicker } from '@/components/sports/SportPicker'
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets()
@@ -40,6 +27,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [favSports, setFavSports] = useState<SportType[]>([])
+  const [onboardingGoal, setOnboardingGoal] = useState('balanced')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -52,54 +40,43 @@ export default function RegisterScreen() {
     )
   }, [])
 
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
+    if (loading) return
     setErrorMsg(null)
-    if (!email.trim() || !password || !username.trim()) {
-      setErrorMsg('Merci de remplir tous les champs.')
-      return
-    }
-    if (password.length < 6) {
-      setErrorMsg('Le mot de passe doit faire au moins 6 caractères.')
-      return
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    setStep(2)
-  }, [email, password, username])
+    if (!email.trim() || !password || !username.trim()) { setErrorMsg('Merci de remplir tous les champs.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setErrorMsg('Adresse email invalide.'); return }
+    if (!/^[a-zA-Z0-9._]{3,24}$/.test(username.trim())) { setErrorMsg('Le pseudo doit faire 3 à 24 caractères et contenir seulement lettres, chiffres, . ou _.'); return }
+    if (password.length < 8) { setErrorMsg('Le mot de passe doit faire au moins 8 caractères.'); return }
+    setLoading(true)
+    try {
+      const { data: available, error } = await supabase.rpc('is_username_available', { candidate: username.trim() })
+      // Older backends may lack this optional preflight. The unique database
+      // constraint remains authoritative when the account is actually created.
+      if (!error && available === false) { setErrorMsg('Ce pseudo est déjà utilisé.'); return }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
+      setStep(2)
+    } catch {
+      setErrorMsg('Connexion interrompue. Réessaie dans un instant.')
+    } finally { setLoading(false) }
+  }, [email, password, username, loading])
 
   const handleRegister = useCallback(async () => {
+    if (loading) return
     setErrorMsg(null)
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    if (!favSports.length) { setErrorMsg('Choisis au moins un sport pour personnaliser ton expérience.'); return }
     setLoading(true)
-
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: { data: { username: username.trim() } },
-    })
-
-    if (error) {
-      setLoading(false)
-      setErrorMsg(error.message)
-      return
-    }
-
-    // Patch username + favorite_sports on profile row (created by DB trigger)
-    if (data.user) {
-      await (supabase as any)
-        .from('profiles')
-        .update({ username: username.trim(), favorite_sports: favSports })
-        .eq('id', data.user.id)
-    }
-
-    setLoading(false)
-
-    if (data.session) {
-      // Session immédiate (confirmation email désactivée) → _layout.tsx redirige via onAuthStateChange
-    } else {
-      // Confirmation email requise
-      setEmailSent(true)
-    }
-  }, [email, password, username])
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(), password,
+        options: { data: { username: username.trim(), favorite_sports: favSports, onboarding_goal: onboardingGoal } },
+      })
+      if (error) { setErrorMsg(error.message); return }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
+      if (!data.session) setEmailSent(true)
+    } catch {
+      setErrorMsg('Connexion interrompue. Réessaie dans un instant.')
+    } finally { setLoading(false) }
+  }, [email, password, username, favSports, onboardingGoal, loading])
 
   if (emailSent) {
     return (
@@ -187,7 +164,7 @@ export default function RegisterScreen() {
               label="Mot de passe"
               value={password}
               onChangeText={setPassword}
-              placeholder="Min. 6 caractères"
+              placeholder="Min. 8 caractères"
               secureTextEntry={!showPassword}
               right={
                 <TouchableOpacity onPress={() => setShowPassword(v => !v)} hitSlop={8}>
@@ -195,6 +172,14 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
               }
             />
+
+            <View style={field.passwordStrengthRow}>
+              {[1,2,3,4].map(i => {
+                const score = [password.length >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length
+                return <View key={i} style={[field.passwordStrengthBar, score >= i && field.passwordStrengthBarActive]} />
+              })}
+              <Text style={field.passwordStrengthText}>{password.length < 8 ? 'Faible' : password.length >= 12 && /[A-Z]/.test(password) && /[0-9]/.test(password) ? 'Fort' : 'Moyen'}</Text>
+            </View>
 
             <TouchableOpacity style={styles.btn} onPress={handleNext} activeOpacity={0.85}>
               <Text style={styles.btnText}>Continuer →</Text>
@@ -205,21 +190,21 @@ export default function RegisterScreen() {
             <Text style={styles.formTitle}>Tes sports</Text>
             <Text style={styles.formSub}>Sélectionne ceux que tu pratiques.</Text>
 
-            <View style={styles.sportsGrid}>
-              {SPORTS.map(s => {
-                const active = favSports.includes(s.type)
-                return (
-                  <TouchableOpacity
-                    key={s.type}
-                    style={[styles.sportChip, active && styles.sportChipActive]}
-                    onPress={() => toggleSport(s.type)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.sportEmoji}>{s.emoji}</Text>
-                    <Text style={[styles.sportLabel, active && styles.sportLabelActive]}>{s.label}</Text>
-                  </TouchableOpacity>
-                )
-              })}
+            <SportPicker value={favSports} onChange={setFavSports} />
+
+            <Text style={[styles.formTitle, { fontSize: FontSize.md, marginTop: Spacing.sm }]}>Ton objectif principal</Text>
+            <View style={styles.goalGrid}>
+              {[
+                ['balanced', '⚡ Être plus complet'],
+                ['endurance', '🏃 Progresser en endurance'],
+                ['strength', '🏋️ Devenir plus fort'],
+                ['weight', '🎯 Composition corporelle'],
+                ['performance', '🏆 Performance sportive'],
+              ].map(([key, label]) => (
+                <TouchableOpacity key={key} style={[styles.goalChip, onboardingGoal === key && styles.sportChipActive]} onPress={() => setOnboardingGoal(key)}>
+                  <Text style={[styles.sportLabel, onboardingGoal === key && styles.sportLabelActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <TouchableOpacity
@@ -311,6 +296,8 @@ const styles = StyleSheet.create({
   formTitle: { fontSize: FontSize.xl, fontWeight: FontWeight.extrabold, color: Colors.textPrimary },
   formSub: { fontSize: FontSize.sm, color: Colors.textTertiary, marginTop: -8 },
   sportsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  goalGrid: { gap: Spacing.sm },
+  goalChip: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: Radius.md, backgroundColor: Colors.bgAlt, borderWidth: 1.5, borderColor: Colors.border },
   sportChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -358,4 +345,8 @@ const field = StyleSheet.create({
   },
   rowFocused: { borderColor: Colors.electric },
   input: { flex: 1, fontSize: FontSize.md, color: Colors.textPrimary },
+  passwordStrengthRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: -8 },
+  passwordStrengthBar: { flex: 1, height: 4, borderRadius: 4, backgroundColor: Colors.borderLight },
+  passwordStrengthBarActive: { backgroundColor: Colors.electric },
+  passwordStrengthText: { fontSize: FontSize.xs, color: Colors.textTertiary, marginLeft: 4 },
 })

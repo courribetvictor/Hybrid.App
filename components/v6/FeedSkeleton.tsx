@@ -1,0 +1,6 @@
+import React,{useEffect}from'react'
+import{View,StyleSheet}from'react-native'
+import Animated,{useAnimatedStyle,useSharedValue,withRepeat,withTiming}from'react-native-reanimated'
+import{Colors,Radius,Shadow,Spacing}from'@/constants/theme'
+export function FeedSkeleton(){const o=useSharedValue(.35);useEffect(()=>{o.value=withRepeat(withTiming(.8,{duration:750}),-1,true)},[]);const a=useAnimatedStyle(()=>({opacity:o.value}));return <View style={s.wrap}>{[0,1].map(i=><Animated.View key={i} style={[s.card,a]}><View style={s.row}><View style={s.avatar}/><View style={{flex:1,gap:7}}><View style={s.lineA}/><View style={s.lineB}/></View></View><View style={s.hero}/><View style={s.lineC}/></Animated.View>)}</View>}
+const s=StyleSheet.create({wrap:{gap:10,paddingTop:8},card:{marginHorizontal:Spacing.md,backgroundColor:'#fff',borderRadius:Radius.xl,padding:14,...Shadow.sm},row:{flexDirection:'row',alignItems:'center',gap:10},avatar:{width:36,height:36,borderRadius:18,backgroundColor:Colors.bgAlt},lineA:{height:10,width:'45%',borderRadius:8,backgroundColor:Colors.bgAlt},lineB:{height:8,width:'28%',borderRadius:8,backgroundColor:Colors.bgAlt},hero:{height:72,borderRadius:15,backgroundColor:Colors.bgAlt,marginTop:13},lineC:{height:9,width:'64%',borderRadius:8,backgroundColor:Colors.bgAlt,marginTop:12}})

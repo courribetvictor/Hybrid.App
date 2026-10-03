@@ -36,6 +36,11 @@ import { useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
 import type { SportType, GymExercise, BadmintonSet, TennisSet, ActivityMetrics } from '@/types/database'
 import { EXERCISE_DB } from '@/constants/exercises'
+import { SPORT_CATALOG, SPORT_BY_KEY } from '@/constants/sportCatalog'
+import { SportActivityPicker } from '@/components/sports/SportActivityPicker'
+import { DynamicSportFields } from '@/components/sports/DynamicSportFields'
+import { useProfile } from '@/hooks/useProfile'
+import { useSensoryFeedback } from '@/hooks/useSensoryFeedback'
 
 // ── Sport config ──────────────────────────────────────────────
 
@@ -46,23 +51,11 @@ type SportConfig = {
   Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>
 }
 
-const SPORTS: SportConfig[] = [
-  { key: 'running',   label: 'Course',      color: '#FF6B35', Icon: PersonStanding },
-  { key: 'cycling',   label: 'Vélo',        color: '#8B5CF6', Icon: Bike },
-  { key: 'swimming',  label: 'Natation',    color: '#06B6D4', Icon: Waves },
-  { key: 'hiking',    label: 'Randonnée',   color: '#6366F1', Icon: Mountain },
-  { key: 'gym',       label: 'Muscu',       color: '#0055FF', Icon: Dumbbell },
-  { key: 'football',  label: 'Football',    color: '#22C55E', Icon: CircleDot },
-  { key: 'tennis',    label: 'Tennis',      color: '#EAB308', Icon: Zap },
-  { key: 'badminton', label: 'Badminton',   color: '#10B981', Icon: Feather },
-  { key: 'boxing',    label: 'Boxe',        color: '#DC2626', Icon: Swords },
-  { key: 'athletics', label: 'Athlétisme',  color: '#F59E0B', Icon: Activity },
-  { key: 'yoga',      label: 'Yoga',        color: '#EC4899', Icon: Flower2 },
-]
+const SPORTS: SportConfig[] = SPORT_CATALOG.map(s => ({ key:s.key, label:s.shortLabel ?? s.label, color:s.color, Icon: Activity }))
 
 const SPORT_MAP = Object.fromEntries(SPORTS.map(s => [s.key, s])) as Record<SportType, SportConfig>
 
-const ENDURANCE_SPORTS: SportType[] = ['running', 'cycling', 'swimming', 'hiking']
+const ENDURANCE_SPORTS: SportType[] = SPORT_CATALOG.filter(s => ['running_endurance','cycling','aquatic','paddle_boat'].includes(s.family)).map(s => s.key)
 
 function formatTimer(secs: number): string {
   const h = Math.floor(secs / 3600)
@@ -77,13 +70,24 @@ function formatTimer(secs: number): string {
 export default function AddActivityModal() {
   const t = useT()
   const { userId } = useSession()
+  const { profile } = useProfile(userId ?? undefined)
   const { addActivity } = useActivities(userId ?? undefined)
+  const { play: sensory } = useSensoryFeedback()
 
   const [sport, setSport] = useState<SportType | null>(null)
   const [durationMin, setDurationMin] = useState('')
   const [calories, setCalories] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [rpe, setRpe] = useState<number | null>(null)
+  const [mood, setMood] = useState<number | null>(null)
+  const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public')
+  const [performedDate, setPerformedDate] = useState(() => new Date().toLocaleDateString('fr-FR'))
+  const [performedTime, setPerformedTime] = useState(() => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))
+  const [sessionType, setSessionType] = useState('training')
+  const [dynamicMetrics, setDynamicMetrics] = useState<Record<string, any>>({})
 
   // Chrono state (endurance only)
   const [timerMode, setTimerMode] = useState<'manual' | 'live'>('manual')
@@ -105,6 +109,9 @@ export default function AddActivityModal() {
     setTimerRunning(false)
     setTimerSecs(0)
     setTimerMode('manual')
+    setDynamicMetrics({})
+    const def = sport ? SPORT_BY_KEY[sport] : null
+    setSessionType(def?.sessionTypes?.[0]?.value ?? 'training')
   }, [sport])
 
   // Endurance fields
@@ -158,45 +165,47 @@ export default function AddActivityModal() {
     }
 
     let metrics: ActivityMetrics
-    if (sport === 'running' || sport === 'cycling' || sport === 'swimming') {
-      metrics = {
-        distance_m: parseFloat(distanceKm) * 1000 || 0,
-        avg_heart_rate: parseInt(avgHeartRate) || undefined,
-      }
-    } else if (sport === 'gym') {
-      const totalVolume = exercises.reduce((sum, ex) => sum + ex.sets.reduce((s, st) => s + st.reps * st.weight_kg, 0), 0)
-      metrics = { exercises, total_volume_kg: totalVolume }
-    } else if (sport === 'badminton') {
-      metrics = { sets, match_won: matchWon ?? false }
-    } else if (sport === 'athletics') {
-      metrics = { event, result_value: parseFloat(resultValue) || 0, result_unit: 's' }
-    } else if (sport === 'hiking') {
-      metrics = {
-        distance_m: parseFloat(distanceKm) * 1000 || 0,
-        avg_heart_rate: parseInt(avgHeartRate) || undefined,
-        elevation_m: parseInt(hikingElevation) || undefined,
-      }
-    } else if (sport === 'football') {
-      metrics = {
-        match_won: footballWon ?? false,
-        goals_scored: parseInt(footballGoals) || 0,
-        assists: parseInt(footballAssists) || 0,
-        position: (footballPosition as any) || undefined,
-      } as any
-    } else if (sport === 'tennis') {
-      metrics = { sets: tennisSets, match_won: tennisWon ?? false, aces: parseInt(tennisAces) || undefined } as any
-    } else if (sport === 'yoga') {
-      metrics = { style: yogaStyle, avg_heart_rate: parseInt(avgHeartRate) || undefined } as any
+    if (sport === 'gym') {
+      const totalVolume = exercises.reduce((sum, ex) => sum + ex.sets.reduce((ss, st) => ss + st.reps * st.weight_kg, 0), 0)
+      metrics = { ...dynamicMetrics, exercises, total_volume_kg: totalVolume, session_type: sessionType }
     } else {
-      metrics = { rounds: parseInt(boxingRounds) || undefined, bout_type: boxingType, avg_heart_rate: parseInt(avgHeartRate) || undefined } as any
+      const def = SPORT_BY_KEY[sport]
+      const parsed: Record<string, any> = {}
+      for (const field of def?.metrics ?? []) {
+        const raw = dynamicMetrics[field.key]
+        if (raw === '' || raw == null) continue
+        if (field.type === 'number') parsed[field.key] = Number(String(raw).replace(',', '.'))
+        else parsed[field.key] = raw
+      }
+      metrics = { session_type: sessionType, ...parsed }
+      // Normalise key distance fields used by existing stats.
+      if (parsed.distance_km != null) metrics.distance_m = parsed.distance_km * 1000
+    }
+
+    const match = performedDate.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (!match) {
+      setErrorMsg('Date invalide. Utilise le format JJ/MM/AAAA.')
+      return
+    }
+    const timeMatch = performedTime.trim().match(/^(\d{1,2}):(\d{2})$/)
+    if (!timeMatch || Number(timeMatch[1]) > 23 || Number(timeMatch[2]) > 59) { setErrorMsg('Heure invalide. Utilise HH:MM.'); return }
+    const performedAt = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(timeMatch[1]), Number(timeMatch[2]), 0)
+    if (Number.isNaN(performedAt.getTime())) {
+      setErrorMsg('Date invalide.')
+      return
     }
 
     try {
       setLoading(true)
-      await addActivity({ sport_type: sport, duration_seconds: dur, calories_burned: parseInt(calories) || null, metrics })
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      router.back()
+      await addActivity({
+        sport_type: sport, duration_seconds: dur, calories_burned: parseInt(calories) || null, metrics,
+        title: title.trim() || null, notes: notes.trim() || null, rpe, mood, visibility,
+        performed_at: performedAt.toISOString(), source: 'manual', is_verified: false,
+      })
+      await sensory('success')
+      setTimeout(() => router.back(), 140)
     } catch (e: any) {
+      sensory('error')
       setErrorMsg(e.message)
     } finally {
       setLoading(false)
@@ -204,7 +213,7 @@ export default function AddActivityModal() {
   }, [sport, timerMode, timerSecs, durationMin, calories, distanceKm, avgHeartRate, exercises, sets, matchWon, event, resultValue,
       footballGoals, footballAssists, footballPosition, footballWon,
       tennisSets, tennisWon, tennisAces, hikingElevation, yogaStyle,
-      boxingRounds, boxingType, addActivity])
+      boxingRounds, boxingType, title, notes, rpe, mood, visibility, performedDate, performedTime, sessionType, dynamicMetrics, addActivity, sensory])
 
   const selectedSport = sport ? SPORT_MAP[sport] : null
   const isEndurance = sport ? ENDURANCE_SPORTS.includes(sport) : false
@@ -239,14 +248,49 @@ export default function AddActivityModal() {
           <Text style={styles.sportSectionTitle}>Quelle activité ?</Text>
           <Text style={styles.sportSectionSub}>Choisissez votre discipline</Text>
         </View>
-        <View style={styles.sportGrid}>
-          {SPORTS.map(s => (
-            <SportCard key={s.key} sport={s} active={sport === s.key} onPress={() => setSport(s.key)} />
-          ))}
-        </View>
+        <SportActivityPicker value={sport} onChange={setSport} favorites={profile?.favorite_sports ?? []} />
 
         {sport && (
           <Animated.View entering={FadeInDown.duration(250).springify()} style={styles.section}>
+
+
+            {/* ── Informations communes ───────────── */}
+            <View style={styles.metaCard}>
+              <Field label="Titre de la séance" value={title} onChange={setTitle} placeholder="Ex. Fractionné 5 × 1 km" />
+              <View style={styles.row}><Field label="Date (JJ/MM/AAAA)" value={performedDate} onChange={setPerformedDate} placeholder="29/09/2026" /><Field label="Heure (HH:MM)" value={performedTime} onChange={setPerformedTime} placeholder="18:30" /></View>
+              <View>
+                <Text style={styles.metaLabel}>Difficulté ressentie (RPE)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(v => (
+                    <TouchableOpacity key={v} style={[styles.scoreChip, rpe === v && styles.scoreChipActive]} onPress={() => setRpe(v)}>
+                      <Text style={[styles.scoreChipText, rpe === v && styles.scoreChipTextActive]}>{v}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              <View>
+                <Text style={styles.metaLabel}>Ressenti</Text>
+                <View style={styles.chipRow}>
+                  {['😫','😕','😐','🙂','🔥'].map((emoji, i) => (
+                    <TouchableOpacity key={emoji} style={[styles.moodChip, mood === i + 1 && styles.scoreChipActive]} onPress={() => setMood(i + 1)}>
+                      <Text style={styles.moodEmoji}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <View>
+                <Text style={styles.metaLabel}>Visibilité</Text>
+                <View style={styles.chipRow}>
+                  {([['public','Public'],['followers','Abonnés'],['private','Privé']] as const).map(([key,label]) => (
+                    <TouchableOpacity key={key} style={[styles.visibilityChip, visibility === key && styles.scoreChipActive]} onPress={() => setVisibility(key)}>
+                      <Text style={[styles.scoreChipText, visibility === key && styles.scoreChipTextActive]}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              <TextInput value={notes} onChangeText={setNotes} placeholder="Notes, sensations, contexte..." placeholderTextColor={Colors.textTertiary} multiline style={styles.notesInput} />
+              <Text style={styles.sourceHint}>Source : saisie manuelle · non vérifiée</Text>
+            </View>
 
             {/* ── Chrono ou durée manuelle ──────── */}
             {isEndurance ? (
@@ -272,41 +316,14 @@ export default function AddActivityModal() {
               <Field label="Calories brûlées" value={calories} onChange={setCalories} keyboardType="numeric" placeholder="400" icon={<Zap size={13} color={Colors.textTertiary} />} />
             )}
 
-            {/* ── Sport-specific fields ─────────── */}
-            {(sport === 'running' || sport === 'cycling' || sport === 'swimming') && (
-              <EnduranceFields distanceKm={distanceKm} onDistanceChange={setDistanceKm} heartRate={avgHeartRate} onHeartRateChange={setAvgHeartRate} />
-            )}
-
-            {sport === 'hiking' && (
-              <HikingFields distanceKm={distanceKm} onDistanceChange={setDistanceKm} elevation={hikingElevation} onElevationChange={setHikingElevation} heartRate={avgHeartRate} onHeartRateChange={setAvgHeartRate} />
-            )}
-
-            {sport === 'gym' && (
-              <GymFields exercises={exercises} onChange={setExercises} t={t} />
-            )}
-
-            {sport === 'badminton' && (
-              <BadmintonFields sets={sets} onSetsChange={setBadmintonSets} won={matchWon} onWonChange={setMatchWon} t={t} />
-            )}
-
-            {sport === 'tennis' && (
-              <TennisFields sets={tennisSets} onSetsChange={setTennisSets} won={tennisWon} onWonChange={setTennisWon} aces={tennisAces} onAcesChange={setTennisAces} t={t} />
-            )}
-
-            {sport === 'football' && (
-              <FootballFields goals={footballGoals} onGoalsChange={setFootballGoals} assists={footballAssists} onAssistsChange={setFootballAssists} position={footballPosition} onPositionChange={setFootballPosition} won={footballWon} onWonChange={setFootballWon} t={t} />
-            )}
-
-            {sport === 'athletics' && (
-              <AthleticsFields event={event} onEventChange={setEvent} result={resultValue} onResultChange={setResultValue} t={t} />
-            )}
-
-            {sport === 'yoga' && (
-              <YogaFields yogaStyle={yogaStyle} onStyleChange={setYogaStyle} heartRate={avgHeartRate} onHeartRateChange={setAvgHeartRate} />
-            )}
-
-            {sport === 'boxing' && (
-              <BoxingFields rounds={boxingRounds} onRoundsChange={setBoxingRounds} boutType={boxingType} onTypeChange={setBoxingType} heartRate={avgHeartRate} onHeartRateChange={setAvgHeartRate} t={t} />
+            {/* ── Formulaire intelligent par discipline ───── */}
+            {sport === 'gym' ? (
+              <>
+                <DynamicSportFields sport={{...SPORT_BY_KEY[sport], metrics: SPORT_BY_KEY[sport].metrics.filter(f => f.key !== 'total_volume_kg')}} sessionType={sessionType} onSessionType={setSessionType} values={dynamicMetrics} onChange={(k,v)=>setDynamicMetrics(p=>({...p,[k]:v}))} />
+                <GymFields exercises={exercises} onChange={setExercises} t={t} />
+              </>
+            ) : (
+              <DynamicSportFields sport={SPORT_BY_KEY[sport]} sessionType={sessionType} onSessionType={setSessionType} values={dynamicMetrics} onChange={(k,v)=>setDynamicMetrics(p=>({...p,[k]:v}))} />
             )}
           </Animated.View>
         )}
@@ -441,11 +458,13 @@ function HikingFields({ distanceKm, onDistanceChange, elevation, onElevationChan
 
 const GYM_EXERCISES = EXERCISE_DB.gym.map(e => e.name)
 
-function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelete, t }: {
+function GymExerciseRow({ exercise, onNameChange, onAddSet, onCopyLastSet, onDeleteSet, onUpdateSet, onDelete, t }: {
   exercise: GymExercise
   onNameChange: (n: string) => void
   onAddSet: () => void
-  onUpdateSet: (si: number, field: 'reps' | 'weight_kg', v: string) => void
+  onCopyLastSet: () => void
+  onDeleteSet: (si:number) => void
+  onUpdateSet: (si: number, field: 'reps' | 'weight_kg' | 'rir' | 'rest_seconds', v: string) => void
   onDelete: () => void
   t: any
 }) {
@@ -454,16 +473,6 @@ function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelet
   const handleNameChange = (v: string) => {
     onNameChange(v)
     setSuggestions(v.length >= 2 ? GYM_EXERCISES.filter(n => n.toLowerCase().includes(v.toLowerCase())).slice(0, 5) : [])
-  }
-
-  const copyLastSet = () => {
-    const last = exercise.sets[exercise.sets.length - 1]
-    if (last) {
-      onAddSet()
-      // The new set is appended empty; we need to set its values — done via onUpdateSet right after addSet callback fires
-      // We store last values in a ref approach; simpler: just call onAddSet then patch via parent
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
   }
 
   const volume = exercise.sets.reduce((s, st) => s + st.reps * st.weight_kg, 0)
@@ -504,8 +513,10 @@ function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelet
       <View style={gymStyles.setsHeader}>
         <View style={{ width: 32 }} />
         <Text style={[gymStyles.setsHeaderText, { flex: 1 }]}>Reps</Text>
-        <Text style={[gymStyles.setsHeaderText, { flex: 1 }]}>Poids (kg)</Text>
-        <View style={{ width: 28 }} />
+        <Text style={[gymStyles.setsHeaderText, { flex: 1 }]}>Kg</Text>
+        <Text style={[gymStyles.setsHeaderText, { flex: 1 }]}>RIR</Text>
+        <Text style={[gymStyles.setsHeaderText, { flex: 1 }]}>Repos</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       {exercise.sets.map((s, si) => (
@@ -515,7 +526,9 @@ function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelet
           </View>
           <SmallField value={s.reps > 0 ? String(s.reps) : ''} onChange={v => onUpdateSet(si, 'reps', v)} placeholder="—" />
           <SmallField value={s.weight_kg > 0 ? String(s.weight_kg) : ''} onChange={v => onUpdateSet(si, 'weight_kg', v)} placeholder="—" />
-          <View style={{ width: 28 }} />
+          <SmallField value={s.rir != null ? String(s.rir) : ''} onChange={v => onUpdateSet(si, 'rir', v)} placeholder="RIR" />
+          <SmallField value={s.rest_seconds ? String(s.rest_seconds) : ''} onChange={v => onUpdateSet(si, 'rest_seconds', v)} placeholder="s" />
+          <TouchableOpacity onPress={() => onDeleteSet(si)} hitSlop={6}><Trash2 size={15} color={Colors.textTertiary}/></TouchableOpacity>
         </View>
       ))}
 
@@ -526,7 +539,7 @@ function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelet
           <Text style={gymStyles.addSetText}>{t.activity.addSet}</Text>
         </TouchableOpacity>
         {exercise.sets.length > 0 && (
-          <TouchableOpacity onPress={copyLastSet} style={gymStyles.copyBtn}>
+          <TouchableOpacity onPress={onCopyLastSet} style={gymStyles.copyBtn}>
             <Copy size={13} color={Colors.textTertiary} strokeWidth={2} />
             <Text style={gymStyles.copyText}>Copier</Text>
           </TouchableOpacity>
@@ -539,7 +552,7 @@ function GymExerciseRow({ exercise, onNameChange, onAddSet, onUpdateSet, onDelet
 function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onChange: (e: GymExercise[]) => void; t: any }) {
   const addExercise = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    onChange([...exercises, { name: '', sets: [{ reps: 0, weight_kg: 0 }] }])
+    onChange([...exercises, { name: '', sets: [{ reps: 0, weight_kg: 0, rir: null, rest_seconds: 90 }] }])
   }
 
   const updateExerciseName = (idx: number, name: string) => {
@@ -553,15 +566,31 @@ function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onCha
 
   const addSet = (exIdx: number) => {
     const next = [...exercises]
-    next[exIdx] = { ...next[exIdx], sets: [...next[exIdx].sets, { reps: 0, weight_kg: 0 }] }
+    next[exIdx] = { ...next[exIdx], sets: [...next[exIdx].sets, { reps: 0, weight_kg: 0, rir: null, rest_seconds: 90 }] }
     onChange(next)
   }
 
-  const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weight_kg', value: string) => {
+  const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weight_kg' | 'rir' | 'rest_seconds', value: string) => {
     const next = [...exercises]
     const sets = [...next[exIdx].sets]
     sets[setIdx] = { ...sets[setIdx], [field]: parseFloat(value) || 0 }
     next[exIdx] = { ...next[exIdx], sets }
+    onChange(next)
+  }
+
+  const copyLastSet = (exIdx: number) => {
+    const next = [...exercises]
+    const last = next[exIdx]?.sets[next[exIdx].sets.length - 1]
+    if (!last) return
+    next[exIdx] = { ...next[exIdx], sets: [...next[exIdx].sets, { ...last }] }
+    onChange(next)
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+  }
+
+  const deleteSet = (exIdx:number,setIdx:number) => {
+    const next=[...exercises]
+    if (!next[exIdx] || next[exIdx].sets.length <= 1) return
+    next[exIdx]={...next[exIdx],sets:next[exIdx].sets.filter((_,i)=>i!==setIdx)}
     onChange(next)
   }
 
@@ -577,12 +606,16 @@ function GymFields({ exercises, onChange, t }: { exercises: GymExercise[]; onCha
         </View>
       )}
 
+      <Text style={{fontSize:FontSize.xs,color:Colors.textSecondary,lineHeight:18}}>RIR = répétitions qu'il te restait en réserve · Repos = secondes entre les séries.</Text>
+
       {exercises.map((ex, ei) => (
         <GymExerciseRow
           key={ei}
           exercise={ex}
           onNameChange={v => updateExerciseName(ei, v)}
           onAddSet={() => addSet(ei)}
+          onCopyLastSet={() => copyLastSet(ei)}
+          onDeleteSet={(si) => deleteSet(ei, si)}
           onUpdateSet={(si, field, v) => updateSet(ei, si, field, v)}
           onDelete={() => deleteExercise(ei)}
           t={t}
@@ -984,6 +1017,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
   },
   footerBtn: { flex: 1 },
+  metaCard: { backgroundColor: Colors.bgCard, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.md, borderWidth: 1, borderColor: Colors.borderLight },
+  metaLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.textSecondary, marginBottom: 7 },
+  chipRow: { flexDirection: 'row', gap: 7, alignItems: 'center' },
+  scoreChip: { minWidth: 32, height: 32, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgAlt, borderWidth: 1, borderColor: Colors.borderLight },
+  scoreChipActive: { backgroundColor: Colors.electricDim, borderColor: Colors.electric },
+  scoreChipText: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.textSecondary },
+  scoreChipTextActive: { color: Colors.electric, fontWeight: FontWeight.bold },
+  moodChip: { width: 42, height: 38, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgAlt, borderWidth: 1, borderColor: Colors.borderLight },
+  moodEmoji: { fontSize: 20 },
+  visibilityChip: { flex: 1, minHeight: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgAlt, borderWidth: 1, borderColor: Colors.borderLight, paddingHorizontal: 8 },
+  notesInput: { minHeight: 88, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, padding: 12, color: Colors.textPrimary, backgroundColor: Colors.bg, textAlignVertical: 'top' },
+  sourceHint: { fontSize: FontSize.xs, color: Colors.textTertiary },
   errorBanner: {
     marginHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
