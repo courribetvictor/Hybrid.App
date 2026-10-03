@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS post_likes (
 ALTER TABLE posts      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE post_likes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "posts_public_read"  ON posts;
+DROP POLICY IF EXISTS "posts_own_insert"   ON posts;
+DROP POLICY IF EXISTS "posts_own_delete"   ON posts;
+DROP POLICY IF EXISTS "likes_public_read"  ON post_likes;
+DROP POLICY IF EXISTS "likes_own_insert"   ON post_likes;
+DROP POLICY IF EXISTS "likes_own_delete"   ON post_likes;
+
 CREATE POLICY "posts_public_read"  ON posts      FOR SELECT USING (true);
 CREATE POLICY "posts_own_insert"   ON posts      FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "posts_own_delete"   ON posts      FOR DELETE USING (auth.uid() = user_id);

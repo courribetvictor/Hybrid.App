@@ -153,6 +153,20 @@ alter table public.equipment enable row level security;
 alter table public.activity_equipment enable row level security;
 
 -- Owner control
+drop policy if exists "live owner write" on public.live_activities;
+drop policy if exists "live viewer read" on public.live_activities;
+drop policy if exists "live points owner write" on public.live_points;
+drop policy if exists "live points permitted read" on public.live_points;
+drop policy if exists "live notes owner write" on public.live_notes;
+drop policy if exists "live notes permitted read" on public.live_notes;
+drop policy if exists "live reactions visible" on public.live_reactions;
+drop policy if exists "live reactions self insert" on public.live_reactions;
+drop policy if exists "live reactions self delete" on public.live_reactions;
+drop policy if exists "plan owner all" on public.training_plan_items;
+drop policy if exists "readiness owner all" on public.readiness_logs;
+drop policy if exists "equipment owner all" on public.equipment;
+drop policy if exists "activity equipment owner all" on public.activity_equipment;
+
 create policy "live owner write" on public.live_activities for all using(auth.uid()=user_id) with check(auth.uid()=user_id);
 create policy "live viewer read" on public.live_activities for select using(
   auth.uid()=user_id or visibility='public' or (visibility='followers' and public.is_following(auth.uid(),user_id))

@@ -11,7 +11,12 @@ alter table if exists public.profiles
   add column if not exists show_body_metrics boolean not null default false,
   add column if not exists bio text,
   add column if not exists fitness_level text,
-  add column if not exists hybrid_score integer not null default 0;
+  add column if not exists hybrid_score integer not null default 0,
+  add column if not exists is_pro boolean not null default false,
+  add column if not exists favorite_sports text[] not null default '{}'::text[],
+  add column if not exists username text,
+  add column if not exists avatar_url text,
+  add column if not exists created_at timestamptz not null default now();
 
 -- Activities: distinguish creation time from the real workout time.
 alter table if exists public.activities
@@ -58,6 +63,11 @@ create table if not exists public.clubs (
   owner_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+alter table public.clubs add column if not exists slug text;
+alter table public.clubs add column if not exists description text;
+alter table public.clubs add column if not exists avatar_url text;
+alter table public.clubs add column if not exists owner_id uuid references auth.users(id) on delete set null;
+create unique index if not exists clubs_slug_unique on public.clubs(slug) where slug is not null;
 create table if not exists public.club_members (
   club_id uuid references public.clubs(id) on delete cascade,
   user_id uuid references auth.users(id) on delete cascade,
@@ -180,16 +190,16 @@ with a as (
 ), parts as (
   select
     least(100.0,
-      coalesce(sum(case when sport_type in ('running','cycling','swimming','hiking')
+      coalesce(sum(case when sport_type::text in ('running','cycling','swimming','hiking')
         then (coalesce(nullif(metrics->>'distance_m','')::numeric,0) / 1000.0 * 1.2 + 2.0) * w else 0 end),0)
     ) as endurance,
-    least(100.0, coalesce(sum(case when sport_type='gym' then 6.0*w else 0 end),0)) as strength,
-    least(100.0, coalesce(sum(case when sport_type='running' then
+    least(100.0, coalesce(sum(case when sport_type::text='gym' then 6.0*w else 0 end),0)) as strength,
+    least(100.0, coalesce(sum(case when sport_type::text='running' then
       (case when coalesce(nullif(metrics->>'distance_m','')::numeric,0) > 0
              and duration_seconds / (nullif(metrics->>'distance_m','')::numeric/1000.0) < 330
         then 6.0 else 2.0 end) * w else 0 end),0)) as speed,
     least(100.0, count(distinct performed_at::date)::numeric / 45.0 * 100.0) as consistency,
-    least(100.0, count(distinct sport_type)::numeric / 7.0 * 100.0) as versatility,
+    least(100.0, count(distinct sport_type::text)::numeric / 7.0 * 100.0) as versatility,
     greatest(0.0, least(100.0, 50.0 + 5.0 * (
       coalesce(sum(case when performed_at >= now()-interval '30 days' then w else 0 end),0)
       - coalesce(sum(case when performed_at < now()-interval '30 days' and performed_at >= now()-interval '60 days' then w else 0 end),0)
