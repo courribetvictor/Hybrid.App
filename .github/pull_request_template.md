@@ -1,8 +1,8 @@
 ## Ce qui change
--
+- 
 
 ## Pourquoi
--
+- 
 
 ## Vérifications
 - [ ] L'app démarre avec `npx expo start`

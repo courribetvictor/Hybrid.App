@@ -4,15 +4,12 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated'
-import { User, BarChart3, Dumbbell, Zap, PersonStanding, Flame } from 'lucide-react-native'
+import { User, BarChart3, Dumbbell, PersonStanding, Flame } from 'lucide-react-native'
 import { router } from 'expo-router'
 import { Colors, FontSize, FontWeight, Radius, Shadow, Spacing } from '@/constants/theme'
 import { SPORTS_CONFIG } from '@/constants/sports'
 import { useActivities } from '@/hooks/useActivities'
 import { useProfile, useSession } from '@/hooks/useProfile'
-import { useSkills } from '@/hooks/useSkills'
-import { useWeeklyGoal } from '@/hooks/useGoal'
-import { CoachTab } from '@/components/ui/CoachTab'
 import { formatDurationLong } from '@/lib/units'
 import type { Activity, SportType } from '@/types/database'
 
@@ -20,13 +17,12 @@ import type { Activity, SportType } from '@/types/database'
 import ProfileScreen from './profile'
 import StatsScreen from './stats'
 
-type SubTab = 'profil' | 'stats' | 'activites' | 'coach'
+type SubTab = 'profil' | 'stats' | 'activites'
 
 const SUB_TABS: { key: SubTab; label: string; Icon: any }[] = [
   { key: 'profil',     label: 'Profil',    Icon: User },
   { key: 'stats',      label: 'Stats',     Icon: BarChart3 },
   { key: 'activites',  label: 'Activités', Icon: Dumbbell },
-  { key: 'coach',      label: 'Coach',     Icon: Zap },
 ]
 
 
@@ -148,8 +144,6 @@ export default function VousScreen() {
   const { userId } = useSession()
   const { activities } = useActivities(userId ?? undefined, 365)
   const { profile } = useProfile(userId ?? undefined)
-  const skills = useSkills(activities as Activity[])
-  const { goal } = useWeeklyGoal()
 
   return (
     <View style={styles.root}>
@@ -171,9 +165,6 @@ export default function VousScreen() {
         {subTab === 'profil'    && <ProfileScreen embedded />}
         {subTab === 'stats'     && <StatsScreen embedded />}
         {subTab === 'activites' && <ActivitiesTab />}
-        {subTab === 'coach'     && (
-          <CoachTab activities={activities as Activity[]} skills={skills} goal={goal} sports={profile?.favorite_sports ?? []} />
-        )}
       </View>
     </View>
   )

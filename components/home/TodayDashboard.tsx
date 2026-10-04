@@ -34,7 +34,7 @@ export function TodayDashboard({ activities, profile }: { activities: Activity[]
   const goalTarget = goal?.value ?? 4
   const weekCount = week.length
   const weekMinutes = Math.round(week.reduce((sum,a)=>sum+(a.duration_seconds||0)/60,0))
-  const weekKm = week.reduce((sum,a)=>sum+Number(a.metrics?.distance_km??(Number(a.metrics?.distance_m??0)/1000)),0)
+  const weekKm = week.reduce((sum,a)=>sum+Number(a.metrics?.distance_km??(Number(a.metrics?.distance_m??0)/1000)??0),0)
   const goalCurrent = goal?.type === 'minutes' ? weekMinutes : goal?.type === 'km' ? weekKm : weekCount
   const progress = Math.min(1, goalTarget ? goalCurrent / goalTarget : 0)
   const nextDelta = rank.key === 'legend' ? 0 : Math.max(0, next.min - score)
@@ -69,8 +69,8 @@ export function TodayDashboard({ activities, profile }: { activities: Activity[]
         <Text style={s.readyMessage}>{readiness.message}</Text>
 
         <View style={s.heroActions}>
-          <SensoryPressable style={s.primaryAction} onPress={() => router.push('/modals/live' as any)} event="selection">
-            <Radio size={17} color="#071225" strokeWidth={2.6}/><Text style={s.primaryActionText}>Démarrer en Live</Text>
+          <SensoryPressable style={s.primaryAction} onPress={() => router.push('/modals/track' as any)} event="selection">
+            <ActivityIcon size={17} color="#071225" strokeWidth={2.6}/><Text style={s.primaryActionText}>Tracker une séance</Text>
           </SensoryPressable>
           <SensoryPressable style={s.secondaryAction} onPress={() => router.push('/modals/add-activity' as any)} event="selection">
             <ActivityIcon size={17} color="#fff"/><Text style={s.secondaryActionText}>Ajouter</Text>
@@ -79,6 +79,7 @@ export function TodayDashboard({ activities, profile }: { activities: Activity[]
       </LinearGradient></SectionReveal>
 
       <SectionReveal delay={90}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.quickRow}>
+        <Quick icon={<ActivityIcon size={19} color="#0F172A"/>} label="Tracker" tint="#E2E8F0" onPress={() => router.push('/modals/track' as any)} />
         <Quick icon={<Sparkles size={19} color={athleteClass?.color ?? '#7C3AED'}/>} label={athleteClass?.name ?? 'Ma classe'} tint={(athleteClass?.color ?? '#7C3AED')+'14'} onPress={() => router.push('/modals/choose-class' as any)} />
         <Quick icon={<CalendarDays size={19} color="#315CFF"/>} label="Calendrier" tint="#EAF0FF" onPress={() => router.push('/modals/calendar' as any)} />
         <Quick icon={<BookOpen size={19} color="#8B5CF6"/>} label="Records" tint="#F2EAFE" onPress={() => router.push('/modals/records' as any)} />

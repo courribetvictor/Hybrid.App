@@ -23,7 +23,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import {
   Trophy, Calendar, Globe, Users, Building2, Search,
-  Zap, PersonStanding, UserPlus, Compass, User, Radio, Shield, ChevronRight,
+  Zap, PersonStanding, UserPlus, Compass, User, Radio, Shield, ChevronRight, BrainCircuit, Sparkles,
 } from 'lucide-react-native'
 import { LeaderboardRow } from '@/components/arena/LeaderboardRow'
 import { ChallengeCard } from '@/components/arena/ChallengeCard'
@@ -123,6 +123,31 @@ export default function ArenaScreen() {
         <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/sport-rankings' as any)} event="selection">
           <View style={styles.performanceIcon}><Trophy size={18} color="#F59E0B"/></View>
           <View style={{flex:1}}><Text style={styles.performanceTitle}>Records & niveaux officiels</Text><Text style={styles.performanceSub}>10 km · natation · vélo · force · niveaux fédéraux vérifiés</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/competition-mode' as any)} event="selection">
+          <View style={[styles.performanceIcon,{backgroundColor:'#FEF3C7'}]}><Trophy size={18} color="#D97706"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Mode compétition</Text><Text style={styles.performanceSub}>Stratégie, readiness, checklist et lancement du tracking</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/intelligence' as any)} event="selection">
+          <View style={[styles.performanceIcon,{backgroundColor:'#EDE9FE'}]}><BrainCircuit size={18} color="#7C3AED"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Hybrid Intelligence</Text><Text style={styles.performanceSub}>Forme, fatigue, charge, prédictions et recommandations</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/timeline' as any)} event="selection">
+          <View style={[styles.performanceIcon,{backgroundColor:'#ECFDF5'}]}><Compass size={18} color="#059669"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Career Timeline</Text><Text style={styles.performanceSub}>Records et grands moments de ta vie sportive</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/recap' as any)} event="selection">
+          <View style={[styles.performanceIcon,{backgroundColor:'#FCE7F3'}]}><Sparkles size={18} color="#DB2777"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Recap 30 jours</Text><Text style={styles.performanceSub}>Ton mois raconté comme une histoire sportive</Text></View>
+          <ChevronRight size={16} color={Colors.textTertiary}/>
+        </SensoryPressable>
+        <SensoryPressable style={styles.performanceCard} onPress={() => router.push('/modals/season' as any)} event="selection">
+          <View style={[styles.performanceIcon,{backgroundColor:'#F5F3FF'}]}><Zap size={18} color="#7C3AED"/></View>
+          <View style={{flex:1}}><Text style={styles.performanceTitle}>Season 08 · WORLD / 01</Text><Text style={styles.performanceSub}>Parcours saisonnier, cosmétiques, événement mondial et progression collective</Text></View>
           <ChevronRight size={16} color={Colors.textTertiary}/>
         </SensoryPressable>
         <View style={styles.leagueCard}>

@@ -39,6 +39,7 @@ import { supabase } from '@/lib/supabase'
 import { formatDurationLong, displayWeight, computeBMI, bmiCategory } from '@/lib/units'
 import type { PreferredUnit, PreferredLanguage, Profile, SportType, Activity } from '@/types/database'
 import { SPORT_BY_KEY, SPORT_CATALOG } from '@/constants/sportCatalog'
+import { V7PlayerCard } from '@/components/v7/V7PlayerCard'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -448,6 +449,8 @@ export default function ProfileScreen({ embedded = false }: { embedded?: boolean
               : '—'}
           </Text>
         </View>
+
+        <V7PlayerCard />
 
         {/* Hybrid identity + rank */}
         <LinearGradient colors={['#172554','#263D88','#315CFF']} start={{x:0,y:0}} end={{x:1,y:1}} style={scoreStyles.card}>
@@ -918,7 +921,7 @@ function GoalModal({
 
               {/* Value grid */}
               <View style={goalModalStyles.grid}>
-                {(typeInfo?.values ?? []).map((n: number) => (
+                {(typeInfo?.values ?? []).map(n => (
                   <TouchableOpacity
                     key={n}
                     style={[

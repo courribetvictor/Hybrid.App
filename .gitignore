@@ -37,3 +37,7 @@ coverage/
 # Supabase local state
 supabase/.temp/
 expo-env.d.ts
+
+# Zip archives and extracted folders
+*.zip
+Hybrid.App/

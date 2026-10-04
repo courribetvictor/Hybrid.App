@@ -16,7 +16,7 @@ export interface ImportedActivity {
  * Imported records are idempotent through (user_id, source, source_external_id)
  * and are marked verified because they originate from a connected provider.
  */
-export async function importActivities(userId: string, source: Exclude<ActivitySource, 'manual' | 'gps'>, rows: ImportedActivity[]) {
+export async function importActivities(userId: string, source: Exclude<ActivitySource, 'manual' | 'gps' | 'hybrid_tracker'>, rows: ImportedActivity[]) {
   if (!rows.length) return [] as Activity[]
   const payload = rows.map(row => ({
     user_id: userId,

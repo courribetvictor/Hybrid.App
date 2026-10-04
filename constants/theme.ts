@@ -42,7 +42,7 @@ export const FamilyColors: Record<string, string> = {
   precision:'#A855F7', paddle_boat:'#0284C7',
 }
 
-export const FontSize = { xs:11, sm:13, md:15, lg:18, xl:24, '2xl':30, '3xl':38, '4xl':48 }
+export const FontSize = { xs:11, sm:13, md:15, lg:18, xl:24, '2xl':30, '3xl':38 }
 export const FontWeight = { regular:'400' as const, medium:'500' as const, semibold:'600' as const, bold:'700' as const, extrabold:'800' as const }
 export const Radius = { sm:8, md:12, lg:16, xl:24, '2xl':30, full:999 }
 export const Spacing = { xs:4, sm:8, md:16, lg:24, xl:32, '2xl':40 }

@@ -2,11 +2,16 @@
   "expo": {
     "name": "Hybrid.App",
     "slug": "hybrid-app",
-    "version": "0.6.0",
+    "version": "0.15.0",
     "scheme": "hybrid",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.hybridapp.app",
@@ -42,12 +47,6 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Hybrid.App utilise ta position uniquement pendant une activité Live ou GPS afin de tracer ton parcours."
-        }
-      ],
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Autoriser Hybrid à suivre votre parcours pendant une activité Live."
         }
       ]
     ],

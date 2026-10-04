@@ -34,13 +34,15 @@ import { Button } from '@/components/ui/Button'
 import { useActivities } from '@/hooks/useActivities'
 import { useSession } from '@/hooks/useProfile'
 import { useT } from '@/lib/i18n'
-import type { SportType, GymExercise, BadmintonSet, TennisSet, ActivityMetrics } from '@/types/database'
+import type { SportType, GymExercise, BadmintonSet, TennisSet, ActivityMetrics, Activity } from '@/types/database'
 import { EXERCISE_DB } from '@/constants/exercises'
 import { SPORT_CATALOG, SPORT_BY_KEY } from '@/constants/sportCatalog'
 import { SportActivityPicker } from '@/components/sports/SportActivityPicker'
 import { DynamicSportFields } from '@/components/sports/DynamicSportFields'
 import { useProfile } from '@/hooks/useProfile'
 import { useSensoryFeedback } from '@/hooks/useSensoryFeedback'
+import { useV7Economy } from '@/hooks/v7/useV7Economy'
+import { RewardBurst } from '@/components/v5/RewardBurst'
 
 // ── Sport config ──────────────────────────────────────────────
 
@@ -73,6 +75,8 @@ export default function AddActivityModal() {
   const { profile } = useProfile(userId ?? undefined)
   const { addActivity } = useActivities(userId ?? undefined)
   const { play: sensory } = useSensoryFeedback()
+  const { rewardActivity } = useV7Economy()
+  const [earnedReward, setEarnedReward] = useState<{xp:number;credits:number;reason:string}|null>(null)
 
   const [sport, setSport] = useState<SportType | null>(null)
   const [durationMin, setDurationMin] = useState('')
@@ -197,13 +201,14 @@ export default function AddActivityModal() {
 
     try {
       setLoading(true)
-      await addActivity({
+      const saved = await addActivity({
         sport_type: sport, duration_seconds: dur, calories_burned: parseInt(calories) || null, metrics,
         title: title.trim() || null, notes: notes.trim() || null, rpe, mood, visibility,
         performed_at: performedAt.toISOString(), source: 'manual', is_verified: false,
-      })
-      await sensory('success')
-      setTimeout(() => router.back(), 140)
+      }) as Activity
+      const earned = rewardActivity(saved)
+      setEarnedReward(earned)
+      await sensory('reward')
     } catch (e: any) {
       sensory('error')
       setErrorMsg(e.message)
@@ -213,7 +218,7 @@ export default function AddActivityModal() {
   }, [sport, timerMode, timerSecs, durationMin, calories, distanceKm, avgHeartRate, exercises, sets, matchWon, event, resultValue,
       footballGoals, footballAssists, footballPosition, footballWon,
       tennisSets, tennisWon, tennisAces, hikingElevation, yogaStyle,
-      boxingRounds, boxingType, title, notes, rpe, mood, visibility, performedDate, performedTime, sessionType, dynamicMetrics, addActivity, sensory])
+      boxingRounds, boxingType, title, notes, rpe, mood, visibility, performedDate, performedTime, sessionType, dynamicMetrics, addActivity, sensory, rewardActivity])
 
   const selectedSport = sport ? SPORT_MAP[sport] : null
   const isEndurance = sport ? ENDURANCE_SPORTS.includes(sport) : false
@@ -341,6 +346,13 @@ export default function AddActivityModal() {
         <Button label={t.common.cancel} variant="ghost" style={styles.footerBtn} onPress={() => router.back()} />
         <Button label={t.common.save} variant="primary" style={styles.footerBtn} onPress={handleSave} loading={loading} disabled={!sport} />
       </View>
+      <RewardBurst
+        visible={!!earnedReward}
+        title={`+${earnedReward?.credits ?? 0} crédits · +${earnedReward?.xp ?? 0} XP`}
+        subtitle={earnedReward?.reason ? `Effort Unit · ${earnedReward.reason}` : 'Séance enregistrée'}
+        xp={earnedReward?.xp ?? 0}
+        onClose={() => { setEarnedReward(null); router.back() }}
+      />
     </KeyboardAvoidingView>
   )
 }

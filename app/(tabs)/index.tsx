@@ -24,7 +24,14 @@ import { ScreenHeader, HeaderIconBtn } from '@/components/ui/ScreenHeader'
 import { Avatar } from '@/components/ui/Avatar'
 import { ActivityCard } from '@/components/feed/ActivityCard'
 import { TodayDashboard } from '@/components/home/TodayDashboard'
-import { HybridMissions } from '@/components/home/HybridMissions'
+import { V7PlayerCard } from '@/components/v7/V7PlayerCard'
+import { V7Quests } from '@/components/v7/V7Quests'
+import { V8WorldCard } from '@/components/v8/V8WorldCard'
+import { IntelligenceCard } from '@/components/v10/IntelligenceCard'
+import { LifeCard } from '@/components/v11/LifeCard'
+import { AdaptiveCard } from '@/components/v12/AdaptiveCard'
+import { useLifeCheckin } from '@/hooks/useLifeCheckin'
+import { useAdaptiveOS } from '@/hooks/v12/useAdaptiveOS'
 import { PostCard } from '@/components/feed/PostCard'
 import { CreatePostModal } from '@/components/feed/CreatePostModal'
 import { FeedSkeleton } from '@/components/v6/FeedSkeleton'
@@ -74,12 +81,14 @@ function computeStreak(activities: Activity[]): number {
 export default function FeedScreen() {
   const { userId, email } = useSession()
   const { profile } = useProfile(userId ?? undefined)
+  const { checkin } = useLifeCheckin(userId ?? undefined)
   const { friendIds } = useFriendships(userId ?? undefined)
   const { following } = useFollows(userId ?? undefined)
   const followingIds = useMemo(() => following.map(f => f.userId), [following])
   const { feed: activityFeed, loading: actLoading, refetch: refetchActs } = useFriendFeed(friendIds)
   const { activities: ownActivities, refetch: refetchOwn } = useActivities(userId ?? undefined, 365)
   const { goal } = useWeeklyGoal()
+  const { snapshot: adaptiveSnapshot } = useAdaptiveOS(ownActivities as Activity[], profile?.favorite_sports ?? [], checkin)
   const { posts, loading: postLoading, createPost, toggleLike, deletePost, refetch: refetchPosts } =
     usePostFeed(userId ?? undefined, followingIds)
 
@@ -130,7 +139,7 @@ export default function FeedScreen() {
       fabScale.value = withSpring(1, { damping: 10, stiffness: 300 })
     })
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    router.push('/modals/add-activity')
+    router.push('/modals/track' as any)
   }, [fabScale])
 
   const handlePostBtn = useCallback(() => {
@@ -179,7 +188,12 @@ export default function FeedScreen() {
   const header = (
     <>
       <TodayDashboard activities={ownActivities as Activity[]} profile={profile} />
-      <HybridMissions activities={ownActivities as Activity[]} />
+      <AdaptiveCard snapshot={adaptiveSnapshot} />
+      <IntelligenceCard activities={ownActivities as Activity[]} />
+      <LifeCard activities={ownActivities as Activity[]} />
+      <V7PlayerCard />
+      <V7Quests activities={ownActivities as Activity[]} />
+      <V8WorldCard />
       <MiniCalendar activities={ownActivities as Activity[]} />
       <WeekSummaryBanner activities={weekActivities} goal={goal} streak={streak} />
       {/* Post bar — compact, minimal */}

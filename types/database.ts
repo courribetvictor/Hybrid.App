@@ -1,7 +1,7 @@
 export type PreferredLanguage = 'fr' | 'en'
 export type PreferredUnit = 'metric' | 'imperial'
 export type SportType = string
-export type ActivitySource = 'manual'|'gps'|'garmin'|'apple_health'|'health_connect'|'strava'
+export type ActivitySource = 'manual'|'gps'|'hybrid_tracker'|'garmin'|'apple_health'|'health_connect'|'huawei_health'|'strava'|'polar'|'suunto'|'coros'
 export interface GymSet { reps:number; weight_kg:number; rir?:number|null; rest_seconds?:number|null; warmup?:boolean }
 export interface GymExercise { name:string; sets:GymSet[] }
 export interface BadmintonSet { player_score:number; opponent_score:number }
@@ -19,7 +19,7 @@ export interface Activity {
   source?:ActivitySource; source_external_id?:string|null; is_verified?:boolean; visibility?:'public'|'followers'|'private';
 }
 export interface ActivityWithProfile extends Activity { profile?:Profile|null }
-export interface PostWithProfile { id:string; user_id:string; content:string; created_at:string; profile?:Profile|null; likes?:string[]; image_url?:string|null; likes_count:number; liked_by_me:boolean; sport_type?:SportType|null; media_url?:string|null }
+export interface PostWithProfile { id:string; user_id:string; content:string; created_at:string; profile?:Profile|null; likes?:string[]; image_url?:string|null }
 
 export type LiveVisibility = 'public' | 'followers' | 'private'
 export interface LiveNote { id:string; at_seconds:number; distance_km?:number|null; text:string; created_at:string }
@@ -32,5 +32,3 @@ export interface LiveActivity {
 }
 export interface TrainingPlanItem { id:string; user_id:string; date:string; sport_type:SportType; title:string; duration_minutes?:number|null; status:'planned'|'done'|'skipped'; source:'manual'|'coach'; details?:Record<string,any> }
 export interface EquipmentItem { id:string; user_id:string; category:string; name:string; brand?:string|null; sport_type?:SportType|null; distance_km?:number; usage_minutes?:number; threshold_km?:number|null; active:boolean; created_at:string }
-
-export interface BodyLog { id:string; user_id:string; weight_kg:number|null; body_fat_percentage:number|null; calories_consumed:number|null; logged_date:string; created_at:string }

@@ -41,42 +41,46 @@ export default function RegisterScreen() {
   }, [])
 
   const handleNext = useCallback(async () => {
-    if (loading) return
     setErrorMsg(null)
     if (!email.trim() || !password || !username.trim()) { setErrorMsg('Merci de remplir tous les champs.'); return }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setErrorMsg('Adresse email invalide.'); return }
     if (!/^[a-zA-Z0-9._]{3,24}$/.test(username.trim())) { setErrorMsg('Le pseudo doit faire 3 à 24 caractères et contenir seulement lettres, chiffres, . ou _.'); return }
     if (password.length < 8) { setErrorMsg('Le mot de passe doit faire au moins 8 caractères.'); return }
-    setLoading(true)
-    try {
-      const { data: available, error } = await supabase.rpc('is_username_available', { candidate: username.trim() })
-      // Older backends may lack this optional preflight. The unique database
-      // constraint remains authoritative when the account is actually created.
-      if (!error && available === false) { setErrorMsg('Ce pseudo est déjà utilisé.'); return }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {})
-      setStep(2)
-    } catch {
-      setErrorMsg('Connexion interrompue. Réessaie dans un instant.')
-    } finally { setLoading(false) }
-  }, [email, password, username, loading])
+    const { data: usernameAvailable, error: usernameCheckError } = await supabase
+      .rpc('is_username_available', { candidate: username.trim() })
+    if (usernameCheckError) { setErrorMsg('Impossible de vérifier le pseudo pour le moment.'); return }
+    if (!usernameAvailable) { setErrorMsg('Ce pseudo est déjà utilisé.'); return }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setStep(2)
+  }, [email, password, username, favSports, onboardingGoal])
 
   const handleRegister = useCallback(async () => {
-    if (loading) return
     setErrorMsg(null)
     if (!favSports.length) { setErrorMsg('Choisis au moins un sport pour personnaliser ton expérience.'); return }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
     setLoading(true)
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(), password,
-        options: { data: { username: username.trim(), favorite_sports: favSports, onboarding_goal: onboardingGoal } },
-      })
-      if (error) { setErrorMsg(error.message); return }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      if (!data.session) setEmailSent(true)
-    } catch {
-      setErrorMsg('Connexion interrompue. Réessaie dans un instant.')
-    } finally { setLoading(false) }
-  }, [email, password, username, favSports, onboardingGoal, loading])
+
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: { data: { username: username.trim(), favorite_sports: favSports, onboarding_goal: onboardingGoal } },
+    })
+
+    if (error) {
+      setLoading(false)
+      setErrorMsg(error.message)
+      return
+    }
+
+    setLoading(false)
+
+    if (data.session) {
+      // Session immédiate (confirmation email désactivée) → _layout.tsx redirige via onAuthStateChange
+    } else {
+      // Confirmation email requise
+      setEmailSent(true)
+    }
+  }, [email, password, username, favSports, onboardingGoal])
 
   if (emailSent) {
     return (

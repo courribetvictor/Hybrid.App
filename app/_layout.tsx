@@ -7,6 +7,11 @@ import * as SplashScreen from 'expo-splash-screen'
 import { I18nContext, translations } from '@/lib/i18n'
 import { useProfile, useSession } from '@/hooks/useProfile'
 import type { PreferredLanguage } from '@/types/database'
+import { V7EconomyProvider } from '@/hooks/v7/useV7Economy'
+import { AvatarOnboardingGate } from '@/components/v7/AvatarOnboardingGate'
+import { V8WorldProvider } from '@/hooks/v8/useV8World'
+import { WebNativeFeel } from '@/components/v9/WebNativeFeel'
+import { V14IdentityProvider } from '@/hooks/v14/useV14Identity'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -41,6 +46,9 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      <V7EconomyProvider>
+      <V8WorldProvider>
+      <V14IdentityProvider>
       <I18nContext.Provider
         value={{
           t: translations[language],
@@ -67,6 +75,7 @@ export default function RootLayout() {
           <Stack.Screen name="modals/connections" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/sports" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/activity/[id]" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/track" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/live" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/calendar" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/records" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
@@ -77,6 +86,28 @@ export default function RootLayout() {
           <Stack.Screen name="modals/sensory-settings" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/sport-rankings" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen name="modals/credentials" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/avatar-studio" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/avatar-photo" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/rewards-hub" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/profile-card" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/companion-studio" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/trophy-room" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/world" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/story-builder" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/season" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/music-space" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/intelligence" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/competition-mode" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/recap" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/timeline" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/life-hub" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/recovery" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/fuel" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/mind" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/adaptive-plan" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/digital-twin" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/scenario-lab" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="modals/journal" options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }} />
           <Stack.Screen
             name="modals/notifications"
             options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
@@ -86,8 +117,13 @@ export default function RootLayout() {
             options={{ presentation: 'modal', headerShown: false, animation: 'slide_from_bottom' }}
           />
         </Stack>
+        <WebNativeFeel />
         <LaunchCurtain visible={launchVisible} onDone={() => setLaunchVisible(false)} />
+        <AvatarOnboardingGate />
       </I18nContext.Provider>
+      </V14IdentityProvider>
+      </V8WorldProvider>
+      </V7EconomyProvider>
     </GestureHandlerRootView>
   )
 }

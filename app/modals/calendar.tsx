@@ -18,7 +18,7 @@ export default function CalendarScreen(){
   const days=Array.from({length:7},(_,i)=>{const d=new Date(base);d.setDate(base.getDate()+i);return d})
   const plans=useMemo(()=>buildCoachPlans(profile?.favorite_sports??[],activities as Activity[]),[profile?.favorite_sports,activities])
   const scheduled=days.map((d,i)=>({date:d,plan:plans[i%Math.max(1,plans.length)]??null,rest:i===3||(!plans.length)}))
-  return <View style={[s.root,{paddingTop:insets.top}]}>
+  return <View style={[s.root,{paddingTop:insets.top}]}> 
     <View style={s.header}><TouchableOpacity style={s.back} onPress={()=>router.back()}><ArrowLeft size={20} color={Colors.textPrimary}/></TouchableOpacity><View style={{flex:1}}><Text style={s.title}>Planning Hybrid</Text><Text style={s.sub}>Ta semaine d’entraînement intelligente</Text></View><TouchableOpacity style={s.add} onPress={()=>router.push('/modals/add-activity' as any)}><Plus size={19} color="#fff"/></TouchableOpacity></View>
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:40}}>
       <View style={s.weekNav}><TouchableOpacity onPress={()=>setOffset(o=>o-1)}><ChevronLeft size={20} color={Colors.textSecondary}/></TouchableOpacity><View><Text style={s.weekTitle}>{base.toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}</Text><Text style={s.weekSub}>{base.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})} — {days[6].toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}</Text></View><TouchableOpacity onPress={()=>setOffset(o=>o+1)}><ChevronRight size={20} color={Colors.textSecondary}/></TouchableOpacity></View>

@@ -4,7 +4,7 @@ import type { Profile } from '@/types/database'
 
 export function useSession(){
   const [userId,setUserId]=useState<string|null>(null),[email,setEmail]=useState<string|null>(null),[ready,setReady]=useState(false)
-  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setUserId(data.session?.user.id??null);setEmail(data.session?.user.email??null);setReady(true)}).catch(()=>setReady(true));const{data}=supabase.auth.onAuthStateChange((_e,s)=>{setUserId(s?.user.id??null);setEmail(s?.user.email??null);setReady(true)});return()=>data.subscription.unsubscribe()},[])
+  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setUserId(data.session?.user.id??null);setEmail(data.session?.user.email??null);setReady(true)});const{data}=supabase.auth.onAuthStateChange((_e,s)=>{setUserId(s?.user.id??null);setEmail(s?.user.email??null);setReady(true)});return()=>data.subscription.unsubscribe()},[])
   return{userId,email,ready}
 }
 
@@ -14,7 +14,7 @@ export function useProfile(userId?:string){
     if(!userId){setProfile(null);return}
     setLoading(true)
     const {data,error}=await supabase.rpc('get_my_profile')
-    if(!error){const row=Array.isArray(data)?data[0]:data;setProfile((row??null) as any)} else {const fallback=await supabase.from('profiles').select('*').eq('id',userId).maybeSingle();if(!fallback.error)setProfile(fallback.data as Profile|null)}
+    if(!error){const row=Array.isArray(data)?data[0]:data;setProfile((row??null) as any)}
     setLoading(false)
   },[userId])
   useEffect(()=>{refetch()},[refetch])
