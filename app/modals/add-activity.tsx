@@ -23,7 +23,7 @@ import * as Haptics from 'expo-haptics'
 import {
   X,
   PersonStanding, Bike, Waves, Mountain, Dumbbell,
-  CircleDot, Zap, Feather, Activity, Timer, Flower2,
+  CircleDot, Zap, Feather, Activity as ActivityIcon, Timer, Flower2,
   Play, Pause, RotateCcw,
   MapPin, Heart, TrendingUp, Clock,
   Swords, Target, Trophy,
@@ -53,7 +53,7 @@ type SportConfig = {
   Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>
 }
 
-const SPORTS: SportConfig[] = SPORT_CATALOG.map(s => ({ key:s.key, label:s.shortLabel ?? s.label, color:s.color, Icon: Activity }))
+const SPORTS: SportConfig[] = SPORT_CATALOG.map(s => ({ key:s.key, label:s.shortLabel ?? s.label, color:s.color, Icon: ActivityIcon }))
 
 const SPORT_MAP = Object.fromEntries(SPORTS.map(s => [s.key, s])) as Record<SportType, SportConfig>
 
